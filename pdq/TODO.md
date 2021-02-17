@@ -1,18 +1,16 @@
 Admin:
-- VUE + JSI = PDQ : a ACID web springboard, "the next little-big-thing" in web dev
 - Finish Duplicate plugins to rename-clone.
 - Plugins: control install/run of has-code/fields/requires installs.
-- Change websocket reconnect to a button.
 - Improve Demo!
 - Config control for control-alt-mouse calling $pdqBreak.
 - Config for home instead of /Admin.
 - Hiding nav and/or sidebars.
-- Add push/update/commit functions
+- Add fossil push/update/commit controls.
 - Use plugin label field instead of name in menu.
 - Status: external news/updates (outside of fossil)
-- Allow changing plugin source-site
+- UI change of plugin source-site
 - Add history for Toasts msgs.
-- Save options like port, etc.
+- Save startup options like port, etc.
 - Automate/document setup for: ssh, remote web server, fossil, chrome filesystem
 - Add "/Media" (optionally store as unversioned, but only if perms set, and not using ssh in remoteurl)
 - Hamburger menu.
@@ -22,8 +20,10 @@ Admin:
 
 
 
-Posts:
- - Add default post.
+Plugins:
+- Posts: Add default posting.
+- Add Docs.
+- Add Sqlite, Ledger, (Debugger?)
 
 Lesser:
 - Security, running in safe-interp or chroot.
@@ -38,3 +38,5 @@ Done:
 - Make status page look like jumbotron from Demo
 - Update without delete/install
 - Updates available indicators
+- Change websocket reconnect to a button.
+

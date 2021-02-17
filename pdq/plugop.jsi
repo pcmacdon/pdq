@@ -350,17 +350,24 @@ function plugdup(plugin:string, newName:string, fromDir='') {
         dp.content.name = newName;
         dat = JSON.stringify(dp, true, 2);
       } else {
-        var ftail = File.tail(id), fext = File.extension(id),
+        var ftail = File.tail(id), fext = File.extension(id), froot = File.rootname(ftail),
           ismat = (ftail.substr(0, plen) == plugin && (ftail[plen] == '.' || ftail[plen] == '-'));
         if (ismat && (fext == '.js' || fext == '.jsi')) {
           id = ddir+'/'+i.replace(plugin, newName);
           if (fext == '.js') {
-            // Rename from first line: ("XXX
-            var strpp = '("'+plugin, dipp=dat.indexOf(strpp), dinl=dat.indexOf('\n');
-            if (dipp<0 || dinl<0 || dinl<dipp)
-              LogWarn("can not convert file: "+id);
-            else
-              dat = dat.replace(strpp, '("'+newName);
+            var frext = File.extension(froot);
+            if (frext == '.min') continue;
+            var re = /\bPdq\.(plugin|component|subcomponent)\(\"([a-zA-Z0-9_]+)/g;
+            dat = dat.replace(re, function(str, p1, p2,...) {
+              if (p2 != plugin)
+                throw 'mismatch: ' +p2+'!='+newName;
+              var len = str.length-plugin.length;
+              var ret = str.substr(0,len) + newName;
+              return ret;
+            });
+            // Rename tags of form:  <XXX-
+            //dat = dat.replace(/  <'+plugin+'-'/g, '  <'+newName+'-');
+            dat = dat.map(['  <'+plugin+'-', '  <'+newName+'-']);
           }
         }
       }

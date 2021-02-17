@@ -1,4 +1,4 @@
-"use strict"; Pdq.Plugin('admin', {
+"use strict"; Pdq.plugin('admin', {
   route: {
     redirect:'system',
     children:[

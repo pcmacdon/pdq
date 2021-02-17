@@ -1,4 +1,4 @@
-// Pdq.js: Integrates Vue with Vuex store.
+// Pdq.js: Plugins with Vue/Vuex/Bootstrap-Vue.
 "use strict";
 
 (function() {
@@ -22,9 +22,10 @@
     showToc:true,
     epoch:0,
     incLst:[],
-    toid: { StartWsConn:0, StartWebSock:0 }, // setTimeout ids.
+    toid: { StartWebSock:0 }, // setTimeout ids.
     Log:Log,
     compCur:null,
+    wsonline:false,
   };
   
   Pdq.pluginConfDef = {
@@ -35,6 +36,7 @@
   Pdq.pluginConf = JSON.parse(JSON.stringify(Pdq.pluginConfDef));
   
   // Define a plugin.
+  Pdq.plugin =
   Pdq.Plugin = function(mod, opts) {
     if (!mod) throw "missing Mod";
     opts.Mod = mod;
@@ -279,7 +281,7 @@
   
   function startup() {
     WsConnClose(false);
-    Pdq.wsonline = 1;
+    Pdq.wsonline = true;
     var pi, r = {browser:navigator.userAgent, session:Session.id};
     var hash = document.location.hash;
     if (hash.substr(0,2) === '#/')
@@ -366,17 +368,27 @@
   function WsConnClose(disc) {
     if (store)
       store.commit('update_s_t_wsClosed', disc);
+    if (Pdq.shadeDisc) {
+      if (disc)
+        $('body')[0].classList.add('pdq-shade');
+      else
+        $('body')[0].classList.remove('pdq-shade');
+      return 1;
+    }
+    var id = $('#apperr')[0];
     if (disc)
-      $('body')[0].classList.add('pdq-shade');
+      id.innerHTML = '<b>Jsish Websocket Disconnect:</b> <button onclick="Pdq.StartWebSock()">Reconnect</button>';
     else
-      $('body')[0].classList.remove('pdq-shade');
+      id.innerHTML = '';
   }
   
   function DoExit(m) {
+    Pdq.wsonline = false;
     dputs('connection closed');
-    WsConnClose(true);
-    clearTimeout(Pdq.toid.StartWebSock);
-    Pdq.toid.StartWebSock = setTimeout(StartWebSock, 5000);
+    if (WsConnClose(true)) {
+      clearTimeout(Pdq.toid.StartWebSock);
+      Pdq.toid.StartWebSock = setTimeout(StartWebSock, 5000);
+    }
   }
   
   function wsClose() {
@@ -477,7 +489,7 @@
               ccc.$pdqSend = function() { return ci.$pdqSend; };
               if (Pdq.useHere && typeof(cc.template) == 'string' && cc.methods /*&& subp*/) {
                 if (!cc.methods.$pdqBreak) {
-                  if (!insub) return;
+                  if (insub) return;
                   console.warn(fpre+': missing $pdqBreak');
                 }
                 cc.template = '<div class="pdqplugframe" v-on:click.alt.ctrl.stop="$pdqBreakCall">'+cc.template+'</div>';
@@ -533,9 +545,11 @@
   function Component(inpath, comp, subc) {
     // Define a plugin component/subcomponent.
     var path = inpath;
-    if (subc)
+    if (subc) {
       path = Pdq.compCur;
-    else
+      if (inpath[0]=='-')
+        inpath = path+inpath;
+    } else
       Pdq.compCur = inpath;
     var pe = path.lastIndexOf('/');
     if (pe>=0)
@@ -785,6 +799,7 @@
       } else if (fpath != '/' && cct != 'object' && cct != 'function')
         return ecmd(fpre+': component must be in [undefined, null, string, object, function]: ', n.path);
       var apply = (fpre !== '/' && cc && typeof(cc) !== 'function');
+      var cpath = n.name.substr(1);
       if (cc)
         StoreMap(cc, n, fpre, keys, apply);
       if (!apply)
@@ -794,9 +809,12 @@
       
       if (meta.insert) { // TODO: allow disabling PDQ sidemenu, etc.
         var ms = meta.insert, tns = [];
-        for (var tsi in ms)
+        for (var tsi in ms) {
+          if (ms[tsi][0]=='-')
+            ms[tsi] = cpath+ms[tsi];
           if (metaInsertNames.indexOf(tsi)<0)
             tns.push(tsi);
+        }
         if (tns.length)
             console.warn(fpre+': insert "'+tns.join(',')+'" not in: "'+metaInsertNames.join(',')+'"');
       }
@@ -865,24 +883,21 @@
     }
     return s;
   }
+
   
-  function StartWsConn() {
-    if (Pdq.ws.readyState == 1)
+  function WebsockOpen() {
+    //WsConnClose(false);
+    //if (!Pdq.wsonline)
       startup();
-    else {
-      clearTimeout(Pdq.toid.StartWsConn);
-      Pdq.toid.StartWsConn = setTimeout(StartWsConn, 50);
-    }
   }
-  
-  function StartWebSock() {
+
+  Pdq.StartWebSock = function StartWebSock() {
     var url = document.URL.replace(/^http/,'ws').split('#')[0];
-    Pdq.ws = new WebSocket(url, "ws");
-    Pdq.ws.onmessage = wsRecv;
-    Pdq.ws.onclose = wsClose;
-    clearTimeout(Pdq.toid.StartWsConn);
-    Pdq.toid.StartWsConn = setTimeout(StartWsConn, 100);
-  }
+    var ws = Pdq.ws = new WebSocket(url, "ws");
+    ws.onmessage = wsRecv;
+    ws.onclose = wsClose;
+    ws.onopen = WebsockOpen;
+  };
   
   function DoCss(mod, css) {
     if (css.indexOf('{')>=0)
@@ -1132,7 +1147,7 @@
     }
     if (window.jsiWebSocket) {
       clearTimeout(Pdq.toid.StartWebSock);
-      Pdq.toid.StartWebSock = setTimeout(StartWebSock, 10);
+      Pdq.toid.StartWebSock = setTimeout(Pdq.StartWebSock, 10);
     }
   }
   
