@@ -1,0 +1,149 @@
+
+// Select matching rows.
+function select(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'select', rows:'', page:1, max:0, filter:'', filtfield:'', orderby:'', orderdesc:false, groupby:'', excludes:[]};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;
+  var rows = s.rows;
+  var Fields = plugin.fields;
+  if (!rows) {
+    var indkeys = '*';
+    if (s.excludes.length) {
+      indkeys = Object.keys(Fields).filter( val => !val in s.excludes );
+      indkeys = indkeys.join(',');
+    }
+    rows = 'rowid,'+indkeys;
+  }
+  var colre = /^[a-zA-Z0-9_,\*]+$/;
+  if (rows != '*' && !rows.match(colre))
+    throw 'bad rows: '+rows;
+
+  var fq = '', q = 'SELECT '+rows+' FROM '+tbl;
+  if (s.filter.length && s.filtfield.length) {
+    if (!s.filtfield.match(colre))
+      throw 'bad filtfield: '+s.filtfield;
+    if (s.filter[0] === '"' && s.filter[s.filter.length-1] == '"') {
+      s.filter = s.filter.substr(1,s.filter.length-2);
+      fq = ' WHERE '+s.filtfield+' = $s(filter)';
+    } else if (s.filter[0] === '/' && s.filter[s.filter.length-1] == '/') {
+      s.filter = s.filter.substr(1,s.filter.length-2);
+      fq = ' WHERE '+s.filtfield+' REGEXP $s(filter)';
+    } else if (s.filter.indexOf('*')>=0) {
+      fq = ' WHERE '+s.filtfield+' GLOB $s(filter)';
+    } else if (s.filter.indexOf('%')>=0) {
+      fq = ' WHERE '+s.filtfield+' LIKE $s(filter)';
+    } else {
+      s.filter =  "%" + s.filter + "%";
+      fq = ' WHERE '+s.filtfield+' LIKE $s(filter)';
+    }
+    q += fq;
+  }
+  if (s.orderby.length) {
+    if (!s.orderby.match(colre))
+      throw 'bad orderby: '+s.orderby;
+    q += ' ORDER BY '+s.orderby;
+    if (s.orderdesc)
+      q += ' DESC';
+  }
+  if (s.groupby.length) {
+    if (!s.groupby.match(colre))
+      throw 'bad groupby: '+s.groupby;
+    q += ' GROUP BY '+$s(groupby);
+  }
+  if (s.max) {
+    var offs = ((s.page-1)*s.max);
+    q += ' LIMIT $s(max) OFFSET @offs';
+  }
+  //puts('Q=',q);
+  var rrows = db.query(q);
+  var cnt = db.onecolumn('SELECT count(*) FROM '+tbl+fq);
+  return {cnt:cnt, rows:rrows};
+}
+
+// Select a single row
+function select1(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'select1', rowid:0, rows:'rowid,*'};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;   
+  var rows = db.query('SELECT '+s.rows+' FROM '+tbl+' WHERE rowid==$s(rowid)');
+  return {cnt:rows.length, rows:rows};
+}
+
+function insert1(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'insert1', data:{}};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;   
+  var d = s.data;
+  db.query('INSERT INTO '+tbl+' %v', 'd');
+  var rowid = db.onecolumn('SELECT last_insert_rowid()');
+  var cnt = db.conf('changeCnt');
+  return {cnt:cnt, rowid:rowid};
+}
+
+// Update a row.
+function update1(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'update1', data:{}};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;   
+  var d = s.data;
+  db.query('UPDATE '+tbl+' %v WHERE rowid=$d(rowid)', 'd');
+  var cnt = db.conf('changeCnt');
+  return {cnt:cnt};
+}
+
+// Update/insert a row.
+// TODO DUPS: delete from TABLE where rowid not in ( select min(rowid) from TABLE group by R,R );
+function upsert(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'update1', data:{}, where:'', keys:[]};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;   
+  var d = s.data;
+  var where = s.where;
+  if (!where && keys.length)
+    where = keys.map(x = x+'=$d('+x+')').join(' AND ');
+  if (!where || where.indexOf(';')>=0)
+    throw 'invalid where: '+where;
+  var rid = db.onecolumn('SELECT rowid FROM '+tbl+' WHERE '+where);
+  if (rid)
+    db.query('UPDATE '+tbl+' %v WHERE rowid=@rid', 'd');
+  else
+    db.query('INSERT INTO '+tbl+' %v', 'd');
+  var cnt = db.conf('changeCnt');
+  return {cnt:cnt};
+}
+// Remove a row.
+function remove1(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'remove1', rowid:0};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;   
+  db.query('DELETE FROM '+tbl+' WHERE rowid=$s(rowid)');
+  var cnt = db.conf('changeCnt');
+  return {cnt:cnt};
+}
+
+// Remove multiple rows.
+function removen(id:number, msg:object, plugin:object, qobj:object) {
+  var options = {op:'removen', rowids:[]};
+  var conf = Object.assign(msg.data, qobj);
+  var s = getOpts(options, conf);
+  var db = Pdq.db, tbl = 'pdq_'+plugin.Mod;
+  var sj = s.rowids.join(',');
+  if (!sj.match(/[0-9,]+/))
+    throw 'invalid rowids: '+sj;
+  db.query('DELETE FROM '+tbl+' WHERE rowid in ('+sj+');');
+  var cnt = db.conf('changeCnt');
+  return {cnt:cnt};
+  /*for (var rid of s.rowids) {
+    db.query('DELETE FROM '+tbl+' WHERE rowid=@rid');
+    cnt += db.conf('changeCnt');
+  }*/
+}
+
+export default *
+//export default {select:select, fetch, insert1, update1, remove1, removen }

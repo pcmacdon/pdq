@@ -1,0 +1,747 @@
+#!/usr/bin/env jsish
+
+require('WebSocket');
+
+var PLUGINS = {};
+var Pdq = null;
+var MSGS = {};
+var plugop = import('plugop.jsi');
+var fossil = import('fossil.jsi');
+var query  = import('query.jsi');
+source('genlist.jsi');
+
+function pdq(args:array|string=void, conf:object=void) {
+
+  var options = {       // Run Jsi from the web in a sandbox.
+    anyOrigin :false,   // Allow CORS.
+    appDir    :'.',     // Directory of project.
+    branch    :'',      // Branch, defaults to current
+    dbreset   :false,   // Drop admin database tables.
+    foreignkey:true,    // Enable foreign key constraints.
+    gen       :'',      // Generate plugin  
+    init      :false,   // Do initialization to create db and fossil repository.
+    integrity :true,    // Do integrity check on startup.
+    local     :true,    // Accept only local connections.
+    m         :'',      // Perform management operation and exit.
+    noCache   :false,   // Fetch new plugins.
+    noCommit  :false,   // Disable fossil add/commit.
+    noGui     :false,   // Do not open browser.
+    noReload  :false,   // Disable requesting hot-reload when files change.
+    noTry     :false,   // Do not try/catch Websockets msgs from browser.
+    owndb     :false,   // Do not put tables in the .fossil file.
+    port      :0,       // Port number for server.
+    pluginurl :'',      // Plugin url
+    pluginbranch:'trunk',// Branch for plugins.
+    quiet     :false,   // No info messages.
+    readonly  :false,   // Databases are opened readonly.
+    repourl   :'https://jsish.org/afossil', // Site that serves out PDQ and PDQ-PLUGINS.
+    rootdir   :'',      // Root directory.
+    server    :false,   // Just the server: do not open a browser.
+    timeout   :600000,  // Time til exit after close of final client websocket in ms.
+    trcFossil :false,   // Trace fossil operations.
+    udata     :{},      // Shortcut add of udata to wsOpts.
+    urlPrefix :'/pdq',  // Prefix: used for reverse proxy.
+    wsdebug   :0,       // WebSockets debug level.
+    wsOpts    :{},      // WebSockets options.
+  };
+
+  var pkgdir = Info.scriptDir();
+
+  var self = {
+    Mod:'pdq',
+    messages:null,
+    queries:null,
+    appSchemaVersion:4,
+    closeId:null,
+    confCache:null,
+    configAttrs:{histmode:false, home:'/admin', noBreak:false},
+    db:null,
+    dbSchemaVersion:0,
+    dbfile:null,
+    dbfos:null,
+    dirs:{},
+    done:0,
+    file:'index.html', // Source file.
+    fileSynChk:null,
+    fosfile:null,
+    fossil:fossil,
+    fop:{},
+    hasSSL:require("WebSocket",0).conf.info.ssl,
+    infoGet:null,
+    isLocal:null,
+    isPdq:false,
+    mnt:null,
+    modev:-1,
+    nocommit:false, // Internal noCommit flag
+    optdbfile:null,
+    pkg:require('pdq',0),
+    pkgdir:pkgdir,
+    Plugin:null,
+    plugin:null,
+    plugop:plugop,
+    plugtbl:null,
+    post:{},
+    posts:null,
+    project:'', // Comes from fossil.
+    projcode:null,
+    projparent:'',
+    userid:Util.getuser().user, // TODO: option, fossil create, fossil passwd
+    verjsi:require('Jsish'),
+    wcSend:null,
+    ws:null,
+    wsObj:null,
+    tables : {
+      conf: {
+        name:'pdq_Admin_Conf',  epoch:0,
+        defs: {
+          opt:'', val:'', mtime:0
+        },
+      },
+      opts: {
+        name:'pdq_Admin_Opts',  epoch:1,
+        defs: {
+          plugin:'', subp:'', userid:'', opt:'', val:'',
+        },
+      },
+      plugins: { // Installed plugins
+        name:'pdq_Admin_Plugins', epoch:1,
+        defs: {
+          name:'', prefix:'', version:0, enabled:false, builtin:false, title:'',
+          author:'', date:'', timestamp:'', timeupdated:'', rating:0,
+          wopts:{}, sopts:'', hide:false, site:'', latestver:0,
+          dlfrom:'', dltime:'', udata:'', requires:'', label:'', description:'',
+          branch:'', vuecomps:''
+        },
+      },
+      pluglist: { // Available external plugins
+        name:'pdq_Admin_Pluglist', epoch:1,
+        defs: {
+          site:'', name:'', title:'', author:'', date:'', version:0, installedver:0,
+          checkeddate:'', dir:'', hascode:false, attrs:'', verjsireq:0,
+          requires:'', label:'', description:'', dlfrom:'', dltime:'', udata:'',
+          branch:'', vuecomps:''
+        },
+      },
+    },
+  };
+  var ids = {};
+  self.plugtbl = self.tables.plugins.name;
+  Pdq = PLUGINS.pdq = self;
+  
+  moduleOpts(options, self, conf);
+  if (!self.noTry)
+    self.noTry = Interp.conf('asserts');
+  self.nocommit = self.noCommit;
+
+  self.Plugin = function(mod, opts) {
+    return opts;
+  };
+  
+  // Send to browser.
+  function wcSend(mod:string, id:number, cmd:string, data:object=void, opts:object=void) {
+    if (!data) data = {};
+    if (!opts) opts = {};
+    var rsp = { mod:mod, cmd:cmd, data:data, opts:opts };
+    rsp = JSON.stringify(rsp);
+    LogTrace("SENDING: "+id+' '+rsp);
+    self.ws.send(id, rsp);
+  }
+  self.wcSend = wcSend;
+  var WcSend = wcSend.bind(null, 'pdq');
+  
+  function WcResp(_msg:object, msg:object) {
+    return WcSend(_msg.id, _msg.cmd+'_rsp', msg, _msg.opts);
+  }
+    
+  
+  function queryCall(id:number, msg:object, plugin:object, cmd:string, login:string) {
+    var q = plugin.queries[cmd], op = q.op;
+    if (!op || !query[op]) {
+      LogWarn('Bad or missing op', op);
+      return;
+    }
+    if (!login && op.substr(0,6) != 'select') {
+      LogWarn('must be logged in to use op: '+op);
+      return;
+    }
+    var res = query[op](id, msg, plugin, query);
+    if (res)
+      wcSend(plugin.Mod, id, cmd+'_rsp', res, msg.opts);
+  }
+
+  function onRecv(ws:userobj, id:number, str:string) {
+    LogTrace("RECV: "+id+' '+str);
+
+    function argCheckCall(data:object, func:function, nam:string) {
+      // Compare function arg names match object names.
+      var al = Info.funcs(func).argList.slice(1);
+      var keys = Object.keys(data);
+      if (al.join(',') === keys.join(',')) return;
+      var emsg = nam + ': object keys do not match function args: "'+al.join(',')+ '" != "'+ keys.join(',')+'"';
+      LogWarn(emsg);
+      WcSend(id, 'error', {msg:emsg});
+    }
+
+    var msg = JSON.parse(str);
+    matchObj(msg, '{cmd:string, data:object, mod:string, opts:object}');
+    var cmd = msg.cmd, data = msg.data, mod = msg.mod, opts = msg.opts, subp = opts.subp;
+    var plugin = PLUGINS[mod];
+    var mscmd = null, mp, emsg, mcstr=mod;
+    msg.id = id;
+    msg.cmd = cmd;
+    if (subp) mcstr+='/'+subp;
+    mcstr+='.'+cmd;
+    if (!plugin) {
+      LogWarn("unknown plugin: "+mod);
+      return;
+    }
+    var Msgs = plugin.messages;
+    var queries = plugin.queries;
+    //puts("QQ", plugin.Mod, queries);
+    var login=getLogin(id);
+    if (queries && queries[cmd]) {
+      puts("QUERY", cmd);
+      queryCall(id, msg, plugin, cmd, login);
+    } else if (cmd !== 'init' && login === null) {
+      WcSend(id, 'error', {msg:'not logged in for cmd: ' + cmd});
+      LogWarn('not logged in', cmd);
+    } else if (cmd[0].toUpperCase() === cmd[0] && !isAdmin(id)) {
+      WcSend(id, 'error', {msg:cmd+' requires ADMIN login'});
+      LogWarn("Admin cmd: "+cmd);
+     } else if (Msgs && ((subp && Msgs[subp] && (mscmd=Msgs[subp][cmd]))
+        || ((mscmd=Msgs[cmd])))
+        ) {
+      opts.login = login;
+      var al = Info.funcs(mscmd).argList,
+        alen = (al?al.length:0);
+      if (alen!=1) {
+        argCheckCall(msg.data, mscmd, mcstr);
+        var margs = [msg].concat(Object.values(data));
+      }
+      if (self.noTry) {
+        if (alen==1)
+          mscmd.call(plugin, msg);
+        else
+          mscmd.apply(plugin, margs);
+      } else {
+        try {
+          if (alen==1)
+            mscmd.call(plugin, msg);
+          else
+            mscmd.apply(plugin, margs);
+        } catch(e) {
+          mp = mod;
+          if (subp)
+            mp += '/'+subp;
+          emsg = e+' >> "'+mp+':'+cmd+'"';
+          WcSend(id, 'error', {msg:emsg});
+          LogWarn('MSG:', emsg);
+        }
+      }
+    } else {
+      LogWarn("unknown web cmd: "+str);
+      WcSend(id, 'warn', {msg:'unknown "'+mod+'" cmd: "'+cmd+'"'});
+    }
+  }
+
+  /*function onOpen(ws:userobj, id:number) {
+    //puts("Opening WS: "+id, 'cookie=',ws.header(id, 'cookie'));
+  }
+  
+  function onFilter(ws:userobj, id:number, urlprot:string, ishttp:boolean) {
+     // puts('WS cookie=',ishttp,id,self.ws.header(id, 'cookie'));
+
+    //LogTrace("onFilter: %d %s %S", id, urlprot, ishttp);
+    // puts('FFF '+id+' '+ishttp+' '+urlprot, ws.header(id, 'uri-args'), ws.idconf(id,'query'));
+  }
+  
+  function onAuth(ws:userobj, id:number, url:string, userpass:string) {
+    LogDebug('Url=%S, UP=%S',url, userpass);
+    return true; // userpass === self.pass
+  }*/
+  
+  function __fileSynOk(fname:string) {
+    var emsg = '',
+      mcb = function(msg:string, type:string, file:string, line:number, col:number) {
+        puts("MM: ", msg, ' line ', line);
+        emsg += 'ERROR at  '+File.tail(file)+':'+line+':'+msg;
+      };
+    try {
+      puts("CHK__", fname);
+      new Interp({noEval:true, noES6:true, scriptFile:fname, debugOpts:{msgCallback:'mcb'}});
+      //i.source(fname);
+    } catch(e) {
+      puts("FAIL", e, emsg);
+    }
+    return emsg;
+  }
+  
+  function fileSynChk(fname:string, noES6) {
+    var emsg = '';
+    if (fname.indexOf('.min.')>0)
+      return;
+    try {
+      LogDebug("Check", fname);
+      new Interp({noEval:true, noES6, logOpts:{ftail:true, capture:true}}).source(fname);
+    } catch(e) {
+      emsg = e;
+    }
+    return emsg;
+  }
+  self.fileSynChk = fileSynChk;
+
+  function onModify(ws:userobj, fname:string) {
+    var ext = File.extension(fname), emsg;
+    if ((ext == '.js' || ext == '.vue') && (emsg=fileSynChk(fname, true))) {
+      emsg = 'Modify Ignored: '+emsg;
+      puts(strftime(null, '%H:%M:%S')+' onModify: '+emsg);
+      WcSend(-1, 'error', {msg:emsg});
+      return;
+    }
+    if (self.modev<0)
+      self.modev = setTimeout(function() { self.modev = -1; wcSend('!', -1, 'reload', {fname:fname}); }, 300);
+  }
+  
+  function onGet(ws:userobj, id:number, url:string, query:array) {
+    puts("ONGET", id, url, ws.idconf(id, 'query'));
+    var target = self.urlPrefix+'/'+self.file;
+    var ret = '>>>'+target;
+    if (url === '') {
+      puts("ROOT");
+      return '';
+    }
+    if (url === '/logout') {
+      ret += '|PDQSESSIONID=; SameSite=Strict; Path=/; HttpOnly; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+      return ret;
+    }
+    if (url === '/login') {
+      var m = ws.idconf(id, 'queryObj');
+      var sha = fossil.checkPassword(m.username, m.password);
+      LogDebug(!!sha,"LOGIN SUCCESS",sha);
+      if (m.frompath.length)
+        ret += '#'+m.frompath;
+      if (sha)
+        ret += '|PDQSESSIONID='+sha+'; SameSite=Strict; Path=/; HttpOnly;';
+        //ret += "|PDQSESSIONID="+sha+"; SameSite=Strict; Path=/; HttpOnly;";
+        //ret += "|PDQSESSIONID="+sha+"; SameSite=Strict; Path=/;";
+      return ret;
+    }
+  }
+  
+  function onUpload(ws:userobj, id:number, filename:string, data:string, startpos:number, complete:boolean)
+  {
+    puts('QUERY:', self.ws.query(id));
+    puts('HDRS:', self.ws.header(id));
+    puts('POS='+startpos+' FN='+filename+' DATA:', data);
+    return;
+    if (!data.length && !startpos) {
+      var fn = File.join(self.uploadDir, File.tail(filename));
+      self.chans[id] = new Channel(fn, 'w+');
+      return;
+    }
+    var chan = self.chans[id];
+    chan.write(data);
+    if (complete) {
+      delete self.chans[id];
+      return "Uploaded file: " + filename;
+    }
+  }
+  
+   /* function onClose(ws:userobj|null, id:number, isError:boolean) {
+    LogDebug("Closing WS: "+id);
+    if (ids[id])
+      delete ids[id];
+  }*/
+
+  function CloseNow(ws:userobj|null)
+  {
+    self.closeId = null;
+    var wcnt = ws.conf('stats.connectCnt');
+    LogDebug("Client connections left: " + wcnt);
+    if (wcnt>0)
+      return;
+    if (ws && !self.wsObj)
+      ws.conf({noUpdate:true});
+    self.done = 1;
+  }
+  
+  function CloseLast(ws:userobj|null)
+  {
+    // Wait around a while for refresh or new clients before exiting
+    LogDebug(self.timeout>0, "Delaying for last to close");
+    if (self.closeId)
+      clearInterval(self.closeId);
+    self.closeId = null;
+    if (self.timeout>0)
+      self.closeId = setTimeout(function () { CloseNow(ws); }, self.timeout);
+    return true;
+  }
+  
+  function cleanUp() {
+    LogTest("Done!");
+    /*if (self.optdbfile)
+      delete self.optdb;
+    delete self.db;
+    if (!self.wsObj)
+      delete self.ws;*/
+  }
+
+  function isLocal() {
+    return self.ws.conf('local');
+  }
+  self.isLocal = isLocal;
+  
+  function infoGet(id:number) {
+    var rv = {project:self.project, isAdmin:isAdmin(id), isLocalhost:self.isLocal(), username:getLogin(id)};
+    rv.appDir = (rv.username?self.appDir:null);
+    return rv;
+  }
+  self.infoGet = infoGet;
+
+  // Get the newest available PDQ version number
+  function newestPdq(url='', nocache=false) {
+    if (self.isPdq)
+      return verInfo;
+    if (!url)
+      url = fossil.surl();
+    if (self.confCache && !nocache)
+      return self.confCache;
+    LogTest("DOING WGET PDQ VER");
+    var cont = JSON.parse(fossil.getRepoFile(url, 'pdq/version.json', self.branch));
+    self.confCache = cont;
+    return cont;
+  }
+  self.fop.newestPdq = newestPdq;
+  
+  // Get current and newest version info.
+  self.fop.getPdqVersion = function(force=false) {
+    var db = self.db;
+    var now = strftime();
+    var cont, ver = self.pkg.version, verjsi=self.verjsi,
+      vc = {curversion:ver, verjsi:verjsi, version:0, verjsireq:0,checkeddate:''};
+    if (!force) {
+      var yday = strftime(strptime()-3600000*24);
+      var rows = db.query("SELECT version,verjsireq,checkeddate FROM pdq_Admin_Pluglist WHERE name = 'PDQ'"
+        +" AND checkeddate > @yday LIMIT 1");
+      if (rows.length) {
+        vc = Object.assign(vc, rows[0]);
+        return vc;
+      }
+    }
+    if (self.project == 'PDQ')
+      return vc;
+    try {
+      var url = fossil.surl();
+      cont = newestPdq(url, true);
+      vc.version = cont.version;
+      vc.verjsireq = cont.verjsireq;
+      vc.checkeddate = now;
+    } catch(e) {
+      LogWarn('failed to get PDQ version: '+e);
+    }
+    if (!cont)
+      return vc;
+    var obj = {name:'PDQ', version:vc.version, verjsireq:vc.verjsireq, checkeddate:now,
+      installedver:self.pkg.version, hascode:true};
+    var rowid = db.onecolumn("SELECT rowid FROM pdq_Admin_Pluglist WHERE name = 'PDQ'");
+    if (rowid)
+      db.query('DELETE from pdq_Admin_Pluglist WHERE rowid = @rowid');
+    db.query('INSERT into pdq_Admin_Pluglist %v', 'obj');
+    return vc;
+  };
+
+  self.fop.pdqVerPurge = function() {
+    var db = self.db;
+    var version = self.pkg.version;
+    var rowid = db.onecolumn("SELECT rowid FROM pdq_Admin_Pluglist WHERE name = 'PDQ' AND version < @version");
+    if (rowid) {
+      LogDebug("PURGE PDQ VER");
+      db.query('DELETE from pdq_Admin_Pluglist WHERE rowid = @rowid');
+    }
+  };
+  
+  function getLogin(id:number) {
+    var ws = self.ws;
+    if (self.local)
+      return self.userid;
+    if (!self.server && ws.idconf(id, 'clientIP') == '127.0.0.1')
+      return self.userid;
+    var un = ws.idconf(id, 'username');
+    return (un?un:'');
+  }
+  
+  function isAdmin(id:number) {
+    var user = getLogin(id);
+    if (!user)
+      return false;
+    var caps = fossil.userCaps(user);
+    return (caps!=null && (caps.indexOf('s')>=0 || caps.indexOf('a')>=0));
+  }   
+
+  function sysInit() {
+    var appDir = self.appDir;
+    if (!File.isdir(appDir)) {
+      File.mkdir(appDir);
+      LogWarn('RES: '+res);
+    }
+    if (self.appDir !== '.')
+      File.chdir(self.appDir);
+    appDir = self.appDir = File.realpath(appDir);
+    if (!File.exists('.fslckout') && self.project != 'PDQ') {
+      var res = fossil.open(self.fosfile);
+      LogWarn('RES: '+res);
+    }    
+
+    var db = self.db;
+    var epochs = {}, nepochs = {}, estr, nstr, isconf;
+    isconf = db.onecolumn("SELECT rowid FROM sqlite_master WHERE name == 'pdq_Admin_Conf'");
+    if (isconf) {
+      estr = db.onecolumn("SELECT val from pdq_Admin_Conf WHERE opt = 'table_epochs'");
+      if (estr) {
+        epochs = JSON.parse(estr);
+      }
+      estr = db.onecolumn("SELECT val from pdq_Admin_Conf WHERE opt = 'configAttrs'");
+      if (estr)
+        self.configAttrs = Object.merge(self.configAttrs, JSON.parse(estr));  // Get home, history-mode, etc
+    }
+    for (var k in self.tables) {
+      var t =  self.tables[k], n = t.name;
+      if (epochs[n] && t.epoch!=epochs[n]) {
+        LogInfo("EPOCH DROP TABLE", n);
+        db.eval('DROP TABLE IF EXISTS '+n);
+      }
+      nepochs[n] = t.epoch;
+      Jsi_TableObj(db, n, t.defs, {verbose:true});
+    }
+    nstr = JSON.stringify(nepochs);
+    if (!estr)
+      db.query("INSERT into pdq_Admin_Conf (opt, val) VALUES('table_epochs',@nstr)");
+    else if (estr != nstr)
+      db.query("UPDATE pdq_Admin_Conf SET val = @nstr WHERE opt = 'table_epochs'");
+    self.fop.pdqVerPurge();
+  }
+  
+  function confValSet(name:string, val:string) {
+    var db = self.db;
+    db.query("UPDATE pdq_Admin_Conf SET val = @val WHERE opt = 'name'");
+    if (!db.conf('changeCnt'))
+      db.query("INSERT into pdq_Admin_Conf (opt, val) VALUES(@name,@val)");
+  }
+  
+  function mimeLookup(ws:userobj, id:number, extension:string, url:string) {
+    ws.conf({mimeLookupFunc:null});
+    if (!File.exists('/etc/mime.types')) return;
+    var dat = File.read('/etc/mime.types').split('\n');
+    var o = ws.conf('mimeTypes');
+    if (!o) ws.conf({mimeTypes:o = {}});
+    for (var i=0; i<dat.length; i++) {
+      var l = dat[i];
+      if (l[0] == '#') continue;
+      l = l.trim().replace(/\s+/g,' ').split(' ');
+      for (var j=1; j<l.length; l++)
+        o[l[j]] = l[0];
+    }
+  }
+  
+  function main() {
+    if (!self.pluginurl) {
+      self.pluginurl='/var/www/fossil/pdq-plugins.fossil';
+      if (!self.noCache && !File.exists(self.pluginurl)) {
+        puts("FAI", self.pluginurl);
+        self.pluginurl = self.repourl+'/pdq-plugins';
+      }
+    }
+    var i, ver = fossil.fossil('version', true);
+    if (!ver)
+      throw 'install fossil first, or use "sudo jsish -m -fossil 1"';
+    if (!self.branch)
+      self.branch = fossil.fossil('branch current').trim();
+    if (fossil.isprivate())
+      self.nocommit = true;
+    self.done = 0;
+     /* if ((typeof args == 'string' && args !== '')
+      || (typeof args === 'array' && args.length)) {
+      LogWarn("args ignored", args);
+    }*/
+    
+    if (!self.rootdir)
+      self.rootdir=self.pkgdir;
+    if (self.appDir)
+      self.appDir = File.realpath(self.appDir);
+    var rd = self.rootdir, ird = self.appDir+'/plugins';
+    if (!File.isdir(ird)) {
+      ird = rd+'/plugins';
+    }
+    var pathalias = { plugins:ird, pdq:rd+'/html' };
+    var wsopts = {
+      local     :self.local,
+      dirIndex  :'jsonp',
+      pathAliases :pathalias,
+      rootdir   :rd, 
+      port    :self.port,
+      debug     :self.wsdebug,
+      onCloseLast :CloseLast,
+      onGet     :onGet,
+      getRegex  :/^\/(login|logout)/,
+      onRecv    :onRecv,
+      onUpload  :onUpload,
+      extHandlers :false, 
+      urlRedirect :self.urlPrefix+'/'+self.file,
+      //urlUnknown  :self.urlPrefix+'/'+self.file,
+      urlPrefix   :self.urlPrefix,
+      vueCvt    :true,
+      mimeLookupFunc:mimeLookup,
+    };
+    if (self.anyOrigin)
+      wsopts.headers = [ "Access-Control-Allow-Origin:", "*" ];
+    if (typeof self.wsOpts === 'string')
+      self.wsOpts = JSON.parse(self.wsOpts, false);
+    if (typeof self.udata === 'string')
+      self.udata = JSON.parse(self.udata, false);
+    if (self.udata && self.udata.length)
+      self.wsOpts.udata = self.udata;
+    for (i in self.wsOpts) {
+      wsopts[i] = self.wsOpts[i];
+    }
+
+    var nproj, flst = File.glob('*.fossil');
+    self.fosfile = flst[0];
+    if (flst.length>1)
+      throw 'found multiple .fossil files: '+flst.join(',');
+    else if (!flst[0])
+      throw 'pdq fossil repo not found!';
+
+    nproj = File.rootname(self.fosfile);
+   
+    if (self.m && !File.exists('.fslckout'))
+      throw 'must be in open checkout root to use "-m"';
+    self.dbfos = fossil.Init(self.fosfile);
+    if (!self.owndb)
+      self.db = self.dbfos;
+    else {
+      self.dbfile = self.project+'_sqlite.db';
+      fossil.dbOpen(-1, self.dbfile, !dbEx);
+    }
+    if (self.project == 'PDQ' || self.project == 'PDQDEV')
+      self.nocommit = self.isPdq = true;
+
+    if (self.dbreset) {
+      for (i in self.tables) 
+        self.db.eval('DROP TABLE IF EXISTS '+self.tables[i].name);
+    }
+    if (self.m) {
+      var cmdList = {
+        iscurrent:  [ fossil.pdquptodate, 'Check if PDQ is up to date'],
+        update:     [ fossil.updatepdq, 'Update/pull PDQ from parent project'],
+        surl:       [ fossil.surl, 'Get url for parent project'],
+        jsonpp:     [ plugop.jsonpp, 'Restringify a json file with indentation (default 1)'],
+        plugdup:    [ plugop.plugdup, 'Duplicate plug' ],
+        gencomponent:[ plugop.gencomponent, 'Generate a .vue.js or .vue component' ],
+        genplugin:  [ plugop.genplugin, 'Generate a .js plugin with one .vue component' ],
+        vuecvt:     [ plugop.vuecvt, 'Convert .vue/.js file' ],
+        vuepublish: [ plugop.vuepublish, 'Generate to/from .vue/.vue.js files' ]
+      };
+      return Jsi_CmdTable([self.m].concat(args), cmdList);
+    }
+    if (Pdq.project == 'PDQ')
+      LogInfo('Project == PDQ and not created with: "jsish -m sclone"');
+
+    LogDebug("Starting: %S", conf);
+    LogDebug("WSOpts: %S", wsopts);
+    sysInit();
+    
+    MSGS.pdq = self.messages;
+    if (self.gen)
+       return plugop.generate(self.gen);
+
+    setTimeout(plugop.loadAll, 50);
+
+    if (self.server)
+      self.timeout = 0;
+    else if (self.file && !self.noReload)
+      wsopts.onModify = onModify;
+    self.ws = new WebSocket( wsopts );
+    if (!self.port)
+      self.port = self.ws.conf('port');
+    if (!self.quiet)
+      printf('Pdq started: file=%S, port=%d\n', self.file, self.port);
+    if (!self.server && self.file && !self.noGui)
+      exec('xdg-open http://127.0.0.1:'+self.port+'/'+self.urlPrefix+' &');
+      
+    while (self.done === 0 && Event.update(10) ) {}
+    cleanUp();
+    return 0;
+  }
+
+  self.messages = {
+    optChange:function(_msg:object) {
+      var m = _msg.data;
+      //matchObj(m, '{opt:string, plugin:string, val:any}');
+      //return self.db.query('UPDATE ' + self.tables.opts.name + ' %s name == plugin', m);
+      LogDebug('optChange', m);
+      var tbl = self.tables.opts.name;
+      m.userid = self.userid;
+      var rowid = self.db.onecolumn('SELECT rowid FROM '+tbl
+        +' WHERE opt = $m(opt) AND userid = $m(userid) AND plugin = $m(plugin)');
+      if (!rowid)
+        self.db.query('INSERT INTO '+tbl+' %v', 'm');
+      else {
+        LogDebug('UPDATE '+tbl+' SET '+m.opt+' = $m(val) WHERE rowid = @rowid', m);
+        self.db.query('UPDATE '+tbl+' SET val = $m(val) WHERE rowid = @rowid');
+      }
+    },
+    optsLoad: function(_msg:object, username:string) {
+      var rv = self.db.query('SELECT * from ' + self.tables.opts.name + ' WHERE userid == @username');
+      WcResp(_msg, {opts:rv});
+    },
+      
+    init: function(_msg:object, browser:string, plugin:string, session:string)
+    { // Login via cookie and set username for connection.
+      var ws = self.ws;
+      var rsp = {info:{}, interp:{}, username:'', opts:[]};
+      if (self.local)
+        rsp.username = self.userid;
+      for (var i of ['assertMode', 'logOpts', 'log'])
+        rsp.interp[i] = Interp.conf(i);
+      var log =  rsp.interp.log;
+      if (self.Trace) log.push('trace');
+      if (self.Debug) log.push('debug');
+      if (self.Test) log.push('test');
+      if (!self.local && session.length) {
+        var sids = ws.ids('sessionJsi='+session);
+        //puts("SIDS: ",session, sids);
+        if (sids.length == 1) {
+          //puts('WS cookie=',id, ws.header(sids[0], 'cookie'));
+          var cos = ws.header(sids[0], 'cookie');
+          if (cos) {
+            cos = cos.split(';');
+            for (var c of cos) {
+              c = c.trim().split('=');
+              if (c.length == 2 && c[0] == 'PDQSESSIONID') {
+                var login;
+                if (c[1].length && login = fossil.checkSha(c[1])) {
+                  rsp.username = login;
+                  ws.idconf(_msg.id, {username:login});
+                }
+              }
+            }
+          }
+        }
+      }
+      rsp.info = infoGet(_msg.id);
+      if (rsp.username != '')
+        rsp.opts = self.db.query('SELECT * from ' + self.tables.opts.name + ' WHERE userid == $rsp(username)'
+          + ' AND plugin = @plugin');
+      plugop.regenList();
+      rsp.info.verinfo = self.fop.getPdqVersion(self.noCache);
+      WcResp(_msg, rsp);
+    },
+  };
+  return main();
+
+}
+
+var verInfo = JSON.parse(File.read(Info.scriptDir()+'/version.json'));
+require('Jsish', verInfo.verjsireq);
+module(pdq, verInfo.version, {info:verInfo});
+

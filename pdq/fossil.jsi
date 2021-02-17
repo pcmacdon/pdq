@@ -1,0 +1,276 @@
+function fossil(str, noerr=false) {
+  if (Pdq.trcFossil)
+    puts('EXEC: fossil '+str);
+  if (!noerr)
+    return exec('fossil '+str);
+  return exec('fossil '+str, {noError:true});
+}
+
+function inroot() {
+  return (File.exists('.fslckout') || File.exists('_FOSSIL_'));
+}
+
+// Create DB file outside of fossil, ie. when Pdq.owndb is true.
+function dbOpen(id:number, fn:string, dbOpts:object=null, create=false)
+{
+  if (!dbOpts)
+    dbOpts = Pdq.dbOpts;
+  var db = Pdq.db = new Sqlite(fn, dbOpts);
+  //db.query('ATTACH DATABASE "'+fn+'" AS data'); // To handle using fossil as the db.
+  //var schema = File.read(Pdq.rootdir+'/schema.sql');
+  //db.eval(schema);
+  if (create ||(Pdq.dbSchemaVersion=db.onecolumn('PRAGMA user_version')) != Pdq.appSchemaVersion) {
+    if (!create)// TODO: do something ...
+      LogWarn('Updating DB schema version from '+Pdq.dbSchemaVersion);
+    db.query('PRAGMA user_version='+Pdq.appSchemaVersion);
+  }
+  if (Pdq.foreignkey) {
+    Pdq.db.query('PRAGMA foreign_keys = ON');
+  }
+  if (Pdq.integrity)
+    CheckIntegrity();
+    
+  //if (!Pdq.noBackup)
+  //  setTimeout(function() { FossilBackup(); }, 10000);
+}
+
+
+function genPassword(user:string, pass:string) {
+  var db = Pdq.dbfos;
+  return Util.hash(Pdq.projcode+'/'+user+'/'+pass, {type:'sha1'});
+}
+
+function checkPassword(user:string, pass:string) {
+  var db = Pdq.dbfos;
+  var userSha = db.onecolumn('select pw from user where login = $user');
+  if (!userSha) {
+    puts("LOOK FAILED",user);
+    return;
+  }
+  var genSha = genPassword(user, pass);
+  puts("GG=",genSha,"UU=",userSha);
+  if (userSha && genSha === userSha) {
+    puts("PASS OK");
+    return genSha;
+  }
+  // TODO: could rehash what with age limiter, eg. day%2+day%2+1.
+}
+
+function userCaps(user:string) {
+  var db = Pdq.dbfos;
+  var cap = db.onecolumn('select cap from user where login = $user');
+  return (cap!=null ? cap : '');
+}
+
+function checkSha(sha:string) {
+  var db = Pdq.dbfos;
+  return db.onecolumn('select login from user where pw = $sha');
+}
+
+function CheckIntegrity() {
+  var db = Pdq.db;
+  Pdq.integrityFail = true;
+  try {
+    var ok = db.onecolumn('PRAGMA integrity_check');
+    if (ok == 'ok')
+      Pdq.integrityFail = false;
+  } catch(e) {
+    puts("FAILED INTEGRITY CHECK: "+e);
+  }
+  if (Pdq.foreignkey) {
+    Pdq.foreignKeysFail = true;
+    try {
+      Pdq.foreignKeysInfo = db.query('PRAGMA foreign_key_check');
+      if (Pdq.foreignKeysInfo.length<=0)
+        Pdq.foreignKeysFail = false;
+    } catch(e) {
+      puts("FAILED FOREIGN KEY CHECK: "+e);
+    }
+  }
+}
+
+function compress() {
+  fossil('rebuild --compress-only');
+}
+
+function add(fn:string, docommit=false, msg='Add file') {
+  if (Pdq.nocommit)
+    return;
+  var rs = fossil('add -f '+fn);
+  //puts('rs:', fn, rs);
+  if (docommit)
+    commit(msg);
+}
+
+function rm(fn:string,  docommit=false, msg='Rm file') {
+  if (Pdq.nocommit)
+    return;
+  fossil('rm --hard '+fn);
+  if (docommit)
+    commit(msg);
+}
+
+function commit(msg='Auto') {
+  if (Pdq.nocommit)
+    return;
+  if (msg != 'Auto')
+    msg = msg.replace(/[^-_a-z0-9\.\/\:,]/gmi, " ");
+  fossil('commit --allow-empty --no-warnings -m "'+msg+'"');
+}
+
+function setProject(project:string) {
+  if (project == 'PDQ')
+    throw 'project name can not be PDQ';
+  Pdq.dbfos.query("REPLACE INTO config('name','value','mtime') VALUES('project-name',@project, strftime('%s', 'now'))");
+}
+
+/*function makeChildProj(name:string, url:string) {
+  var db = Pdq.dbfos;
+  db.eval("UPDATE config SET name='parent-project-code' WHERE name='project-code';"+
+    "UPDATE config SET name='parent-project-name' WHERE name='project-name';"+
+    "INSERT INTO config(name,value) VALUES('project-code',lower(hex(randomblob(20))));"+
+    "INSERT INTO config(name,value) VALUES('parent-project-url',@url);"
+    );
+  db.query("INSERT INTO config(name,value)  VALUES('project-name', @name);");
+}*/
+
+
+function open(fn:string)
+{
+  if (Pdq.project == 'PDQ')
+    throw 'must be a subproj to use add';
+  fossil('open '+fn);
+}
+
+function Init(fn:string)
+{
+  if (!File.exists(fn))
+    throw 'file not found: '+fn;
+  var vlst = Vfs.list();
+  if (vlst.length>=1 && Vfs.conf(vlst[0], 'file') == File.tail(fn)) {
+    //puts('VC', Vfs.conf(vlst[0], 'file'));
+    Pdq.mnt = vlst[0];
+  } else
+    Pdq.mnt = Vfs.mount('fossil', fn);
+  //puts("VVV", vlst, Pdq.mnt);
+  var db = Pdq.dbfos = new Sqlite(fn, {name:'repository'});
+  var codb = File.dirname(fn) + '/.fslckout';
+  if (File.exists(codb))
+    db.query('ATTACH DATABASE @codb as localdb');
+
+  Pdq.project = db.onecolumn('select value from config where name = "project-name"');
+  Pdq.projcode = db.onecolumn('select value from config where name = "project-code"');
+  if (!Pdq.project || !Pdq.projcode)
+    throw 'missing project';
+  var url = db.onecolumn("SELECT value FROM config WHERE name = 'parent-project-url'");
+  if (url)
+    Pdq.projparent = url;
+  if (Pdq.nocommit) {
+    if (!Pdq.m)
+      LogInfo('Note fossil commit disabled branch='+Pdq.branch+' project='+Pdq.project);
+  } else {
+    var ppc = db.onecolumn("SELECT value FROM CONFIG where name='parent-project-name'");
+    if (ppc != 'PDQ' && ppc != 'PDQDEV' && Pdq.project != 'PDQDEV' && !Pdq.m)
+      LogWarn('fossil file is not a child project of PDQ', ppc);
+  }
+  return db;
+}
+
+function wgetUrl(url:string, out='-') {
+  if (!Pdq.hasSSL && url.substr(0,6)=='https:')
+    url = 'http'+url.substr(5);
+  return Wget(url, {O:(out=='-'?'.':out)});
+  //return exec('wget -q '+url+' -O '+out);
+}
+
+function extractPlugin(name:string, ofile:string, branchpl:string) {
+  if (File.exists(ofile))
+    File.remove(ofile);
+  var rfn = Pdq.pluginurl;
+  if (File.exists(rfn)) {
+    fossil('zip '+branchpl+' '+ofile+' -name . -R '+rfn+' --include "plugins/'+name+'/*"');
+  } else {
+     wgetUrl(rfn+'/zip?r='+branchpl+'&in=plugins/'+name+'/*',ofile);
+  }
+}
+
+function surl() {
+  var url = Pdq.db.onecolumn("SELECT value FROM config WHERE name = 'parent-project-url'");
+  if (!url)
+    throw 'there is no parent-project-url, did you use: "jsish -m sclone"';
+  if (url[0] == "'" && url.length>3)
+    url = url.substr(1,url.length-3);
+  return url;
+}
+
+function pdquptodate(url='') {
+  if (!url)
+    url = surl();
+  var cont = Pdq.fop.newestPdq(url);
+  return (!cont || cont.version <= Pdq.pkg.version);
+}
+
+function isprivate(branch='') {
+  if (!branch)
+    branch = Pdq.branch;
+  if (branch == 'private')
+    return true;
+  return false;
+}
+
+function updatepdq(opts='', msg='') {
+  // Pull from parent-project, merge then commit.
+  var url = surl(), nconf = Pdq.fop.newestPdq(url), nver = nconf.version, ver = Pdq.pkg.version;
+  if (!nver)
+    return 'Already at latest version: ' + ver;
+  var branch = fossil('branch current').trim();
+  if (branch != Pdq.branch)
+    throw 'branch changed: '+branch+' != '+Pdq.branch;
+  if (isprivate(branch))
+    opts + ' --private';
+  var dif = fossil('changes');
+  if (dif) {
+    if (!Pdq.nocommit && fossil('changes content.json plugins/jsi_config.js')) {
+      fossil('commit -m supdate content.json plugins/jsi_config.js', true);
+      dif = fossil('changes');
+    }
+  }
+  if (dif)
+    throw 'first need to run "fossil commit"';
+  fossil('pull '+opts+' --from-parent-project '+url);
+  var mrg = '', ms;
+  try {
+    mrg = fossil('merge');
+    ms = mrg.match(/WARNING: [0-9]+ merge conflicts/);
+  } catch (e) {
+    LogDebug('nothing to merge');
+  }
+  if (!mrg)
+    return;
+  if (ms) {
+    puts('Conflict', mrg);
+    throw 'conflict with merge; not committing:  '+ms[0];
+  }
+  if (!msg)
+    msg = 'PDQ update '+ver+'-'+nver+' '+opts+': '+Pdq.project+' '+url;
+  msg = msg.replace(/[^-_a-z0-9\.\/\:,]/gmi, " ");
+  var cmd = 'fossil commit -m "'+msg+'"';
+  if (!Pdq.nocommit)
+    exec(cmd);
+  Pdq.fop.pdqVerPurge();
+}
+
+function getRepoFile(url:string, name:string, branch:string) {
+  var fn;
+  if (File.exists(url))
+    fn = url;
+  else if (url.substr(0,7) == 'file://')
+    fn = url.substr(7);
+  if (fn)
+    return fossil('cat -r '+branch+' -R '+fn+' '+name);
+  return wgetUrl(url+'/doc/'+branch+'/'+name);
+}
+
+export default *
+
+

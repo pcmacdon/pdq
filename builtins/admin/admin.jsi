@@ -1,0 +1,196 @@
+export default {
+  messages: {
+    plugins: {
+      List: function(_msg:object) {
+        var db = Pdq.dbfos;
+        var res = db.query("SELECT rowid,* FROM pdq_Admin_Plugins");
+        this.$pdqResp(_msg, {rows:res});
+      },
+      Enable: function(_msg:object, enabled, plugin) {
+        var db = Pdq.dbfos;
+        if (plugin == 'admin') return;
+        var res = db.query("UPDATE pdq_Admin_Plugins SET enabled = @enabled WHERE name = @plugin AND enabled != @enabled");
+        var changed = db.conf('changeCnt');
+        if (changed)
+          plugop.JsonUpdate();
+        //_msg.id = -1;
+        //this.$pdqResp(_msg, {changed:changed, enabled:enabled, plugin:plugin});
+      },
+      Hide: function(_msg:object, hide, plugin) {
+        var db = Pdq.dbfos;
+        if (plugin == 'admin') return;
+        var res = db.query("UPDATE pdq_Admin_Plugins SET hide = @hide WHERE name = @plugin AND hide != @hide");
+        var changed = db.conf('changeCnt');
+        if (changed)
+          plugop.JsonUpdate();
+        //this.$pdqResp(_msg, {changed:changed, hide:hide, plugin:plugin});
+      },
+      Avail: function(_msg:object) {
+        var list = plugop.getPluginList(_msg.data);
+        this.$pdqResp(_msg, {list:list});
+      },
+      Remove: function(_msg:object, opts:object, plugin:string) {
+        var db = Pdq.dbfos;
+        if (plugin == 'admin') return;
+        if (plugop.Remove(plugin, opts))
+          this.$pdqResp(_msg, {plugin:plugin});
+      },
+      Duplicate: function(_msg:object, plugin:string, plugnew:string) {
+        var db = Pdq.dbfos;
+        if (plugin == 'admin') return;
+        plugop.plugdup(plugin, plugnew);
+        this.$pdqResp(_msg, {plugin:plugin, plugnew:plugnew});
+      },
+      Install: function(_msg:object, name:string, opts:object) {
+        // Install named plugin.
+        puts("INSTALLING", name);
+        matchObj(opts, "{allowCode:boolean, dlorigin:string, upgrade:boolean}", true, false);
+        if (!name.match(/^[-a-zA-Z0-9_]+$/) || name == 'admin')
+          throw('invalid name: '+name);
+        var fex = File.exists('plugins/'+name);
+        if (fex && !opts.upgrade)
+          throw 'already installed plugin: '+name;
+        var ofile = 'install_tmp.zip';
+        if (File.exists(ofile))
+          File.remove(ofile);
+        LogDebug("EXTRACT");
+        opts.dlorigin = Pdq.pluginurl;
+        fossil.extractPlugin(name, ofile, Pdq.pluginbranch);
+        LogDebug("DONE EXTRACT");
+        if (!File.exists(ofile) || File.size(ofile)<30)
+          throw 'missing or empty file';
+        var destdir = File.pwd();
+        if (fex && opts.upgrade) // TODO: upgrade could avoid commit for Remove, then revert.
+          plugop.Remove(name, {keepconf:true});
+        Zip(['unzip', ofile, destdir]);
+        File.remove(ofile);
+        LogDebug("DONE INSTALL", name);
+        var done = plugop.Install(name, opts);
+        this.$pdqResp(_msg, {done:true, name});
+        fossil.commit('Plugin install='+name+': '+opts.dlorigin);
+      },
+    },
+    
+    system: {
+      ProjName: function(_msg:object, info:object) {
+        var db = Pdq.dbfos;
+        if (info.project && info.project != Pdq.project && info.project.length) {
+          Pdq.fossil.setProject(info.project);
+          Pdq.project = info.project;
+        }
+        this.$pdqResp(_msg, {info:Pdq.infoGet(_msg.id)});
+      },
+      Upgrade: function(_msg:object, info:object) {
+        if (!Pdq.isLocal())
+          throw 'PDQ can not be upgraded using non-local';
+        var opts = (fossil.isprivate()?'--private':'');
+        var done=false, msg = fossil.updatepdq(opts);
+        if (!msg) {
+          msg = "UPGRADED PDQ: a restart is required now";
+          setTimeout(function() { exit(0); }, 3000);
+          done = true;
+        }
+        this.$pdqResp(_msg, {done:done, msg});
+      },
+      pdqVerinfo: function(_msg:object) {
+        var rsp = Pdq.fop.getPdqVersion();
+        this.$pdqResp(_msg, {verinfo:rsp});
+      },
+      
+      plugVerinfo: function(_msg:object) {
+      },
+  
+    },
+  
+    users: {
+      List: function(_msg:object) {
+        var db = Pdq.dbfos;
+        var res = db.query("SELECT rowid,login,uid,cap,info FROM user WHERE login != 'anonymous'"
+          + " AND login != 'reader' AND login != 'developer' AND login != 'nobody'");
+        this.$pdqResp(_msg, {rows:res});
+      },
+      Delete: function(_msg:object, info:object) {
+        matchObj(info, '{info:string, login:string,pw: string, uid:number}');
+        var db = Pdq.dbfos;
+        puts('INFO',info);
+        db.query("DELETE FROM user WHERE uid=$info(uid)");
+        this.$pdqResp(_msg, {info:info});
+      },
+    
+      Update: function(_msg:object, info:object, isAdd:boolean) {
+        matchObj(info, '{cap:string, info:string, login:string, pw:string, uid:number}');
+        var db = Pdq.dbfos;
+        puts('INFO',isAdd,info);
+        if (isAdd) {
+          info.uid = db.onecolumn('SELECT max(uid) FROM user');
+          info.uid++;
+          if (info.pw != '')
+            info.pw = Pdq.fossil.genPassword(info.login, info.pw);
+          //puts('NEW',info);
+          db.query("INSERT INTO user %v", 'info');
+        } else {
+          db.query("UPDATE user SET info=$info(info) WHERE uid=$info(uid)");
+          if (info.pw != '') {
+            var pass = Pdq.fossil.genPassword(info.login, info.pw);
+            if (pass && pass.length) {
+              db.query("UPDATE user SET pw=@pass WHERE uid=$info(uid)");
+              // TODO: if this is currently logged in user, redirect with new cookie. 
+            }
+          }
+        }
+        info.pw = '';
+        this.$pdqResp(_msg, {info:info});
+      },
+    },
+    files: {
+      Dir: function(_msg:object, dir:string, filter:string, max:number) {
+        
+        var appDir = Pdq.appDir, ldir = appDir.substr(0);
+        if (dir != '') {
+          ldir += '/'+dir;
+          ldir = File.realpath(ldir);
+          if (appDir !== ldir.substr(0, appDir.length)) {
+            LogWarn("out of tree:", ldir, appDir);
+            ldir = appDir;
+          }
+        }
+        if (filter == '') filter = '*';
+        else if (filter.indexOf('*')<0)
+          filter = '*'+filter+'*';
+        var rr = {retInfo:true, dir:ldir};
+        if (max>0) rr.limit = max;
+        var rows = File.glob(filter, rr);
+        this.$pdqResp(_msg, {rows:rows});
+      },
+      Apply: function(_msg:object, names:array, op:string) {
+        puts("TODO APPLY", op, names);
+         // this.$pdqSend(_msg.id, _msg.cmd+'_rsp', {}, _msg.opts);
+      },
+      Load: function(_msg:object, path:string) {
+        this.$pdqResp(_msg, readFile(path));
+      },
+    
+      Save: function(_msg:object, path:string, text:string) {
+        this.$pdqResp(_msg, writeFile(path, text));
+      },
+    },
+    repos: {
+      Files: function(_msg:object,  dir:string, filter:string, max:number, page:number, sortBy:string, sortDesc:boolean) {
+        var db = Pdq.dbfos;
+        var rows = db.query("select rowid as rowid,*,datetime(mtime, 'unixepoch', 'localtime') as datestamp from vfile");
+        this.$pdqResp(_msg, {rows:rows, cnt:rows.length});
+      },
+      Fossilui: function(_msg:object) {
+        if (!Pdq.isLocal())
+          throw 'Fossil UI in non-local is unsupported';
+        var port = Pdq.ws.conf('port')+1;
+        // TODO: check if already running on port and just open tab in browser.
+        System.exec('fossil ui --port '+port+' &');
+      },
+    },
+  },
+};
+
+
+
+

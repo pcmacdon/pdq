@@ -1,0 +1,76 @@
+#!/usr/bin/env jsish
+
+function genlist(args, ...) {
+  var lln = 'content.json';
+  var jss = genContent(args, lln);
+  File.write(lln, jss);
+}
+
+function genContent(indirs:array=undefined, lln='content.json', proj='PDQ', projcode='', projparent='') {
+
+  var i, dir, dirs=['builtins', 'plugins'];
+  if (indirs && indirs.length)
+    dirs = indirs;
+  var lo = {};
+  if (File.exists(lln))
+    lo = JSON.parse(File.read(lln));
+  for (dir of dirs) {
+    if (!File.isdir(dir)) continue;
+    var l={}, la=[];
+    var lst = File.glob('index.json',{recurse:true,maxDepth:2,dir});
+    //puts('LST', lst);
+    for (i of lst) {
+      var di = dir+'/'+i, v, s, d = File.read(di);
+      //puts(d);
+      try {
+        v = JSON.parse(d);
+      } catch(e) {
+         LogInfo("Converting JSON:", di);
+         v = JSON.parse(d, false);
+         File.write(di, JSON.stringify(v, true, 2));
+      }
+      if (!(s=v.content)) {
+        LogWarn('missing content',i);
+        continue;
+      }
+      if (!s.name) {
+        LogWarn('missing name',i);
+        continue;
+      }
+      var din = File.dirname(i), t = File.tail(din);
+      if (l[s.name] || s.name != t) {
+        LogWarn('duplicate or mismatch name',i, s.name);
+        continue;
+      }
+      //s.dir = din;
+      var ddir= dir+'/'+din;
+      s.hascode = (File.exists(ddir+'/'+s.name+'.jsi') || File.exists(ddir+'/index.jsi'));
+      delete v.content;
+      s.attrs = Object.keys(v).join(',');
+      if (!s.date)
+        s.date = strftime(null,'%Y-%m-%d');
+      l[s.name] = s;
+      la.push(s);
+    }
+    lo[dir] = la;
+  }
+  var pkgi;
+  if (Pdq)
+    pkgi = Pdq.pkg.conf.info;
+  else {
+    pkgi = JSON.parse(File.read(Info.scriptDir()+'/version.json'));
+  }
+  lo.version = pkgi.version;
+  lo.verjsireq = pkgi.verjsireq;
+  if (proj)
+    lo.project = proj;
+  if (projcode)
+    lo.projcode = projcode;
+  if (projparent)
+    lo.projparent = projparent;
+  var jss = JSON.stringify(lo, true, 2);
+  return jss;
+}
+
+
+module(genlist);

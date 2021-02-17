@@ -1,0 +1,13 @@
+{
+ "content":{
+  "author":"pcmacdon", 
+  "date":"2020-12-15", 
+  "label":"Admin", 
+  "name":"admin", 
+  "requires":"", 
+  "title":"PDQ Admin-interface", 
+  "udata":"", 
+  "version":1.0008,
+  "vuecomps":""
+ }
+}

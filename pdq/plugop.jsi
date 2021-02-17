@@ -1,0 +1,545 @@
+
+function newIndex(name:string, title:string) {
+  var now = strftime(null,'%Y-%m-%d');
+  var ind = {
+    author:Pdq.username,
+    date:now,
+    name:name,
+    dlfrom:'',
+    dltime:'',
+    title:title,
+    version:1
+  };
+  return ind;
+}
+
+function doImport(fn, mod, popts) {
+  var plug = {}, jsc = {}, fnj=fn+'.jsi';
+  if (File.exists(fnj))
+    plug = import(fnj);
+
+  var fni = File.dirname(fn)+'/index.json', s = File.read(fni);
+  jsc = JSON.parse(s);
+  if (typeof(jsc) != 'object')
+    throw 'expected object';
+  for (var k in jsc) 
+    if (typeof(plug[k]) != 'undefined')
+      throw 'overloaded field: '+k;
+    else
+      plug[k] = jsc[k];
+  for (k in popts) 
+    if (typeof(plug[k]) != 'undefined')
+      throw 'overloaded field: '+k;
+    else
+      plug[k] = popts[k];
+  if (plug.fields)
+    Jsi_TableObj(Pdq.db, 'pdq_'+mod,  plug.fields);
+  if (plug.Init)
+    plug.Init.call(plug);
+  return plug;
+}
+
+function loadOne(n, bi, dd) {
+  if (PLUGINS[n]) { LogWarn("duplicate plugin",n); return false; }
+  function wcResp(mod:string, _msg:object, msg:object) {
+    return Pdq.wcSend(mod, _msg.id, _msg.cmd+'_rsp', msg, _msg.opts);
+  }
+  var k, popts = {
+    $pdqSend:Pdq.wcSend.bind(null, n),
+    $pdqResp:wcResp.bind(null, n),
+  };
+
+  puts("Load Plugin:", n, n);
+  var fromDir=(bi?Pdq.rootdir+ '/builtins':Pdq.appDir+'/plugins');
+  var plug = null, fn = fromDir+'/'+n+'/'+n;
+  if (Pdq.noTry) {
+    plug = doImport(fn, n, popts);
+  } else {
+    try {
+      plug = doImport(fn, n, popts);
+    } catch(e) {
+      LogError('plugin load failed', n);
+    }
+  }
+  if (!plug)
+    return false;
+  //matchObj(plug, '{content:object, messages:object, data:object}',true,true);
+  plug.Mod = n; 
+  if (!plug.messages)
+    plug.messages = null;
+  if (!plug.queries)
+    plug.queries = null;
+  else {
+    for (k in plug.queries) {
+      var kk = plug.queries[k];
+      if (!kk.op || !query[kk.op])
+        LogWarn(plug.Mod+'.json has bad or missing "queries.'+k+'.op" [', kk.op, '] not in:', Object.keys(query).join(','));
+    }
+  }
+  //if (!plug.Version)
+  //  plug.Version = 1;
+  MSGS[n] = plug.messages;
+  if (MSGS[n])
+    pluginCheckMsgi(MSGS[n], n, true, 0,'',console.error);
+  var pinfo = Pdq.tables.plugins.defs;
+  Object.freeze(pinfo);
+  var ddv, ignores = [];
+  if (dd) ddv = dd[n];
+  try {
+    //Object.assign(pinfo, plug.content);
+    var pc = plug.content, pk = Object.keys(pinfo);
+    for (k in pc) {
+      if (pk.indexOf(k)>=0)
+        pinfo[k] = pc[k];
+      else
+        ignores.push(k); }
+    pinfo.name = n;
+    pinfo.builtin = (bi==1);
+    if (!ddv) {
+      pinfo.enabled = true;
+      ddv = dbInsert(pinfo);
+      if (dd)
+        dd[n] = ddv;
+    } else if (pinfo.version != ddv.version) {
+      pinfo.enabled = (n=='admin'?true: ddv.enabled);
+      dbUpdate(pinfo);
+    }
+  } catch(e) {
+    puts("ER: ", e);
+  }
+  if (ignores.length)
+    LogWarn('In plugin "'+n+'" ignoring "content": '+ignores.join(','));
+  if (!ddv)
+    return false;
+  plug.dbopts = ddv;
+  Object.freeze(plug);
+  PLUGINS[n] = plug;
+  if (dd)
+    delete dd[n];
+  return true;
+}
+
+function loadAll() {   
+
+  var ecmd = null;
+  var n, i, bi, d, fromDir;
+  var dd = {}, dat = Pdq.db.query('SELECT * FROM '+Pdq.plugtbl); 
+  for (i of dat)
+    dd[i.name] = i;
+  for (bi = 0; bi<2; bi++) {
+    fromDir=(bi?Pdq.rootdir+ '/builtins':Pdq.appDir+'/plugins');
+    if (!File.isdir(fromDir)) continue;
+    d = File.glob({types:'d', dir:fromDir});
+    for (i of d) {
+      n = File.tail(i);
+      loadOne(n, bi, dd);
+    }
+  }
+  // Cleanup missing.
+  var odk = Object.keys(dd);
+  for (i of odk) {
+    LogInfo("Deleting old plugin db entry:", i);
+    var tbl = Pdq.plugtbl;
+    Pdq.db.query('DELETE FROM '+tbl+' WHERE name == @i');
+  }
+  JsonUpdate();
+}
+
+function loadFinish(name:string, dir:string) {
+  if (!loadOne(name, false, null))
+    throw 'load failed: '+name;
+  JsonUpdate();
+  Pdq.fossil.add(dir);
+  regenList('', false);
+}
+
+function Install(name, opts) {
+  // Check for syntax errors, messages and/or queries allowed.
+  
+  function verify(name, opts, dir) {
+    var msg, fn, d;
+  
+    var jsc, fni = dir+'/index.json';
+    if (!File.exists(fni))
+      throw 'missing index.json';
+      
+    var s = File.read(fni);
+    jsc = JSON.parse(s);
+    if (!jsc.content)
+      throw "index.json missing content";
+    if (!opts.allowCode && jsc.messages)
+      throw 'plugin contains "messages" which is disallowed: '+dir;
+  
+    function subChk(dir, ext) {
+      if (!File.isdir(dir))
+        return;
+      d = File.glob('*.'+ext, {dir:dir, recurse:true});
+      if (ext == 'jsi' && d.length && !opts.allowCode)
+        throw 'plugin contains .jsi code which is disallowed: '+dir;
+      for (fn of d) {
+        msg = Pdq.fileSynChk(dir+'/'+fn, (ext=='js'));
+        if (msg) {
+          puts("SYNTAX ERROR: "+msg);
+          throw msg;
+        }
+      }
+    }
+    subChk(dir+'/html', 'js');
+    subChk(dir, 'jsi');
+    jsc.content.dlfrom = opts.dlorigin;
+    jsc.content.dltime = strftime();
+    File.write(fni, JSON.stringify(jsc, true, 2));
+    loadFinish(name, dir);
+  }
+
+  var dir = 'plugins/'+name;
+  if (!File.exists(dir))
+    throw 'missing dir: '+ dir;
+    
+  if (Pdq.noTry)
+    return verify(name, opts, dir);
+  
+  try {
+    verify(name, opts, dir);
+  } catch(e) {
+    puts('plugin "'+name+'" verify failed:',e);
+    File.remove(dir, true);
+    throw(e);
+  }
+}
+
+function vuecvt(fn:string, out='') {
+  var rs = Util.vueConvert(fn);
+  if (!out)
+    return rs;
+  if (out == '.') {
+    var fext = File.extension(fn), fr = File.rootname(fn);
+    if (fext == '.vue')
+      out = fn+'.js';
+    else
+      out = File.rootname(fr)+'.vue';
+  }
+  File.write(out, rs);
+  return out;
+}
+
+function vuepublish(dir='.', reverse='') { // Generate .vue.js to/from .vue files.
+  var opts = {recurse:true, types:'f', maxDepth:5};
+  if (dir && dir != '.') {
+    opts.dir =dir;
+    if (dir[dir.length-1] != '/') dir+='/';
+    opts.prefix = dir;
+  }
+  var ext = (reverse?'.vue':'.vue.js'),
+    flst = [], lst = File.glob('*'+ext, opts);
+  for (var i of lst) {
+    var fn = (dir=='.'?i:File.join(dir, i));
+    flst.push(vuecvt(fn, '.'));
+  }
+  if (!reverse && fossil.inroot() && !File.exists('jsi')) {
+    sunzip();
+    flst.push('jsi');
+  }
+  for (fn of flst)
+    fossil.add(flst);
+}
+
+function ConfGen() {
+  var dat = Pdq.db.query('SELECT * FROM '+Pdq.plugtbl); 
+  var jconf = {attrs:Pdq.configAttrs, plugins:[], builtins:[]};
+  jconf.status = {project:Pdq.project, projcode:Pdq.projcode};
+  for (var i of dat) {
+    var ip = (i.builtin ? jconf.builtins:jconf.plugins);
+    ip.push({name:i.name, enabled:i.enabled, hide:i.hide, date:i.date, vuecomps:i.vuecomps});
+  }
+  return jconf;
+}
+
+function jsonpp(fn, indent:string=1) {
+  if (typeof(indent) == 'string')
+    indent = parseInt(indent);
+  var v = JSON.parse(File.read(fn));
+  v = JSON.stringify(v, true, indent);
+  File.remove(fn);
+  File.write(fn, v);
+}
+
+function JsonUpdate() {
+  var jstr = JSON.stringify(ConfGen(), true, 2),
+    dat, fn = 'plugins/jsi_config.js',
+    dir = File.dirname(fn);
+  if (!File.isdir(dir))
+    return;
+  jstr = 'window.PdqConfigStr = `' + jstr + '`;';
+  if (File.exists(fn)) {
+    dat = File.read(fn);
+    if (dat == jstr) return;
+  }
+  LogDebug('Updating:', fn);
+  File.write(fn, jstr);
+  if (!dat && Pdq.project != 'PDQ')
+    Pdq.fossil.add(fn, true, 'Add initial plugins/jsi_config.js');
+}
+
+function regenList(msg='Config update content.json', docommit=true) {
+  var dat, jss, fn = File.join(Pdq.appDir, 'content.json'), fex = File.exists(fn);
+
+  if (fex)
+    dat = File.read(fn);
+  try {
+    jss = genContent(args, fn, Pdq.project, Pdq.projcode, Pdq.projparent);
+  } catch(e) {
+    LogError('gen fail', e);
+  }
+  if (!jss) return;
+  if (dat == jss && fex) return;
+  // Update content.json
+  if (!Pdq.isPdq) {
+    File.write(fn, jss);
+    Pdq.fossil.add(fn, docommit, msg);
+  }
+  return jss;
+}
+
+function genplugin(plugin:string) {
+  var dir = 'plugins/'+plugin;
+  if (File.isdir(dir))
+    throw '!already exists: '+dir;
+  return;
+  // TODO: Make index.json, plus html/plugin.js and html/plugin.vue.js
+  File.mkdir(dir);
+  File.write(fn, dat);
+}
+
+function gencomponent(fn:string) {
+  if (File.exists(fn))
+    throw '!already exists: '+fn;
+  var fmt = Util.vueConvert(fn, null);
+  var dat = format(fmt, "  <div>\n    <router-view />\n  </div>", "  data:function() { return {}; },\n  methods:{\n    $pdqBreak:function $pdqBreak() {debugger;},\n  },\n" );
+  File.write(fn, dat);
+}
+
+function plugdup(plugin:string, newName:string, fromDir='') {
+  if (!fromDir)
+    fromDir = 'plugins/';
+  if (fromDir[fromDir.length-1] != '/')
+    fromDir += '/';
+  var sdir = fromDir+plugin, ddir = fromDir+newName;
+  if (!File.exists(sdir))
+    throw "!NO SRC DIR: " + sdir;
+  if (File.exists(ddir))
+    throw "!DEST ALREADY EXISTS: " + ddir;
+  if (newName=='admin' || File.exists('builtins/'+newName))
+    throw "!DEST IS BUILTIN OR INVALID: " + newName;
+  if (!newName.match(/^[a-z][a-z0-9_]+$/))
+    throw "!DEST NAME MUST MATCH: [a-z][a-z0-9_]+";
+  var lst = File.glob('*', {dir:sdir, recurse:true}).sort();
+  if (!lst.length)
+    throw '!Empty dir';
+  File.mkdir(ddir);
+  var plen = plugin.length;
+  puts('DUP FROM=', plugin, ' TO=', newName);
+  for (var i of lst) {
+    var dat, is = sdir+'/'+i, id = ddir+'/'+i;
+    if (File.isdir(is))
+      File.mkdir(id);
+    else {
+      dat = File.read(is);
+      if (i == 'index.json') {
+        var dp = JSON.parse(dat);
+        dp.content.name = newName;
+        dat = JSON.stringify(dp, true, 2);
+      } else {
+        var ftail = File.tail(id), fext = File.extension(id),
+          ismat = (ftail.substr(0, plen) == plugin && (ftail[plen] == '.' || ftail[plen] == '-'));
+        if (ismat && (fext == '.js' || fext == '.jsi')) {
+          id = ddir+'/'+i.replace(plugin, newName);
+          if (fext == '.js') {
+            // Rename from first line: ("XXX
+            var strpp = '("'+plugin, dipp=dat.indexOf(strpp), dinl=dat.indexOf('\n');
+            if (dipp<0 || dinl<0 || dinl<dipp)
+              LogWarn("can not convert file: "+id);
+            else
+              dat = dat.replace(strpp, '("'+newName);
+          }
+        }
+      }
+      //puts("WRITING", id, dat.length);
+      File.write(id, dat);
+    }
+  }
+  if (!Pdq.m)
+    loadFinish(newName, ddir);
+}
+ 
+function Remove(plugin:string, opts) {
+  puts("REMOVING", plugin, opts);
+  var s = getOpts({keepconf:false}, opts);
+  var db = Pdq.db;
+  var rec =  db.query("SELECT * FROM pdq_Admin_Plugins WHERE name = @plugin");
+  if (!rec || !rec.length || rec[0].builtin) return false;
+  var res = db.query("DELETE FROM pdq_Admin_Plugins WHERE name = @plugin");
+  var changed = db.conf('changeCnt');
+  if (!changed)
+    return false;
+  var bi = rec[0].builtin,
+    fromDir=(bi?'builtins':'plugins'),
+    bdir = fromDir+'/'+plugin;
+  if (!File.exists(bdir)) {
+    LogWarn("NODIR", bdir);
+    return false;
+  }
+  File.remove(bdir, true);
+  if (!Pdq.nocommit)
+    Pdq.fossil.rm(bdir, false);
+  JsonUpdate();
+  delete PLUGINS[plugin];
+  regenList('Plugin remove '+plugin+': '+JSON.stringify(opts));
+  if (!s.keepconf)
+    db.query("DELETE FROM pdq_Admin_Opts WHERE plugin = @plugin");
+  return true;
+}
+
+function dbInsert(data:object) {
+  var sdate = strftime(null,{utc:true, iso:true});
+  data.timestamp = sdate;
+  data.date = sdate.split('T')[0];  
+  Pdq.db.query('INSERT INTO '+Pdq.plugtbl+' %v', 'data');
+  return data;
+}
+
+function dbUpdate(data:object) {
+  var sdate = strftime(null,{utc:true, iso:true});
+  data.timestamp = sdate;
+  data.date = sdate.split('T')[0];
+  var sql = 'UPDATE '+Pdq.plugtbl+' %v WHERE name==$data(name)';
+  Pdq.db.query(sql, {obj:{name:'data', skip:['name']}});
+  return data;
+}
+
+// Sanity-check given Msg function args.
+function pluginCheckMsgi(m, nam, isi, lev, comp, ecmd) {
+  if (!ecmd)
+    ecmd = console.error;
+  var pm = 'Msg'+(isi?'i':'s');
+  var pref = pm + ' '+nam+comp;
+  if (lev>1) 
+    return ecmd(pref+' object may not be more than 2 levels deep');
+  if (typeof(m) !== 'object') return ecmd(pref+'is not an object');
+  var inf, ist, al;
+  for (var j in m) {
+    var i = m[j];
+    switch (typeof(i)) {
+      case 'object': pluginCheckMsgi(i,nam,isi,lev+1,'.'+j,ecmd); break;
+      case 'function':
+        if (!isi) continue;
+        inf = Info.funcs(i), al = inf.argList;
+        if (!al || al.length<1) return ecmd(pref+' function needs at least an _msg arg: '+j);
+        if (al[0] !==  '_msg') ecmd(pref+' arg 1 should be named _msg');
+        ist = al.slice(1);
+        var istu = ist.join(',');
+        var ists = ist.sort().join(',');
+        if (istu !== ists)
+          return ecmd(pref+'>'+j+' function params after "'+al[0]+'" are not sorted: '+ists);
+        break;
+      default: 
+        return ecmd(pref+' type is not a function or object: '+j);
+    }
+  }
+}
+
+function genPlugin(name:string, dest='', from='Template') {
+  var dir = File.join(Pdq.rootdir, 'builtins/'+name);
+  if (File.exists(dir))
+    throw 'plugin already exists: '+name;
+  if (!dest)
+    dest = Pdq.appDir;
+  var todir = File.join(dest, 'plugins');
+  if (!File.exists(todir))
+    File.mkdir(todir);
+  todir = File.join(todir, name);
+  if (!File.exists(todir))
+    File.mkdir(todir);
+  dir = File.join(Pdq.rootdir, from);
+  var n, i, dat, dn, d = File.glob({recurse:true, types:'f', dir}).sort();
+  for (i of d) {
+    var ifn = File.join(dir, i);
+    dat = File.read(ifn).map([from, name]);
+    n = File.join(todir, i.map([from, name]));
+    dn = File.dirname(n);
+    if (!File.exists(dn))
+      File.mkdir(dn);
+    File.write(n, dat);
+  }
+}
+
+function unpackjsi(indir='.') {
+  // Unpack the lib/www directory from jsish.
+  var dir = File.join(indir, 'jsi');
+  Jsi_CopyDir('/zvfs/lib/www', 'jsi');
+  // Next make pdq available locally if necessary
+  // fossil.unpack('pdq');
+  
+}
+
+function sunzip(foss='') {
+  if (File.isdir('jsi')) {
+    if (foss)
+      fossil('rm --hard jsi');
+    File.remove('jsi', true);
+  }
+  Jsi_CopyDir('/zvfs/lib/www', 'jsi');
+  if (foss)
+    fossil('add jsi');
+}
+
+
+function getPluginList(opts) {
+  var db = Pdq.db;
+  var now = strptime();
+  var s = getOpts({nocache:false, novar:false}, opts);
+  var site = Pdq.pluginurl;
+  var branch = Pdq.pluginbranch;
+  if (!s.nocache && !Pdq.noCache) {
+    var yday = strftime(now-3600000*24);
+    var rows = db.query("SELECT rowid,* FROM pdq_Admin_Pluglist WHERE site==@site AND branch==@branch AND name != 'PDQ'"
+      +" AND checkeddate > @yday");
+    if (rows.length)
+      return rows;
+  }
+  var cont = fossil.getRepoFile(site, 'content.json', branch);
+  if (!cont) {
+    LogWarn('Fallback to plugins in db');
+    return db.query("SELECT rowid,* FROM pdq_Admin_Pluglist WHERE site==@site AND branch==@branch AND name != 'PDQ'");
+  }
+  var i, list = JSON.parse(cont).plugins;
+  now = strftime(now);
+  for (i of list) {
+    i.site = site;
+    i.checkeddate = now;
+  }
+  var  t = Pdq.tables.pluglist.defs;
+  db.query('DELETE from pdq_Admin_Pluglist WHERE site==@site AND branch==@branch ');
+  db.eval('BEGIN;');
+  try {
+    for (i of list) {
+      var obj = {};
+      for (var j in i) {
+        if (typeof(t[j]) == typeof(i[j]))
+          obj[j] = i[j];
+        else
+          LogWarn('skipped value',j,i[j]);
+      }
+      db.query('INSERT into pdq_Admin_Pluglist %v', 'obj');
+      if (PLUGINS[i.name] && i.version)
+        db.query('UPDATE pdq_Admin_Plugins SET latestver = $i(version) WHERE name == $i(name) AND site=@site AND branch==@branch ');
+    }
+    db.eval('COMMIT;');
+  } catch(e) {
+    LogWarn('pluglist db insert failure: '+e);
+    db.eval('ROLLBACK;');
+  }
+  return list;
+};
+
+export default *
