@@ -1,8 +1,7 @@
 Admin:
-- Finish Duplicate plugins to rename-clone.
 - Plugins: control install/run of has-code/fields/requires installs.
 - Improve Demo!
-- Config control for control-alt-mouse calling $pdqBreak.
+- Config control for control-alt-b1 calling $pdqBreak.
 - Config for home instead of /Admin.
 - Hiding nav and/or sidebars.
 - Add fossil push/update/commit controls.
@@ -39,4 +38,5 @@ Done:
 - Update without delete/install
 - Updates available indicators
 - Change websocket reconnect to a button.
+- Finish Duplicate plugins to rename-clone.
 

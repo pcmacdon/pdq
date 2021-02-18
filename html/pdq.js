@@ -18,7 +18,7 @@
     isBusy:false,
     inOptsLoad:false,
     noBreak:false,
-    useHere:true,
+    addBreak:true,
     showToc:true,
     epoch:0,
     incLst:[],
@@ -26,6 +26,7 @@
     Log:Log,
     compCur:null,
     wsonline:false,
+    subcomps:{},
   };
   
   Pdq.pluginConfDef = {
@@ -487,7 +488,7 @@
               ccc.$pdqPlug = function() { return {fpath:path, pname:plugin, sname:subp, cname:cpn, route:fpre, plugin:Plugins[plugin], plugsub:ci}; };
               //ccc.$pdqPlugin = function() { return fpre; };
               ccc.$pdqSend = function() { return ci.$pdqSend; };
-              if (Pdq.useHere && typeof(cc.template) == 'string' && cc.methods /*&& subp*/) {
+              if (Pdq.addBreak && typeof(cc.template) == 'string' && cc.methods /*&& subp*/) {
                 if (!cc.methods.$pdqBreak) {
                   if (insub) return;
                   console.warn(fpre+': missing $pdqBreak');
@@ -502,7 +503,11 @@
                 StoreMap(cs[csi], keysn[1], name, keysn[0], true);
                 fnSetup(cs[csi], true);
                 //MapSetup(name, cs[csi]);
+                //puts("IMPORT VUE COMP SUB", csi, name);
                 Vue.component(csi, cs[csi]);
+                if (Pdq.subcomps[csi])
+                  console.warn('duplicate subcomponent:',csi);
+                Pdq.subcomps[csi] = cs[csi];
               }
             }
             fnSetup(cc, false);
@@ -583,6 +588,7 @@
       if (subc) {
         sopts = plug.comps[subp];
         sopts.subs[inpath] = comp;
+        //puts('SUBCOMPONENT insert:', subp, inpath);
       } else {
         sopts = {
           comp:comp, include:popts.include, css:popts.css, subs:{},
@@ -810,8 +816,10 @@
       if (meta.insert) { // TODO: allow disabling PDQ sidemenu, etc.
         var ms = meta.insert, tns = [];
         for (var tsi in ms) {
-          if (ms[tsi][0]=='-')
+          if (ms[tsi][0]=='-') {
             ms[tsi] = cpath+ms[tsi];
+          }
+          //puts('SUBCOMP ROUTE:', ms[tsi]);
           if (metaInsertNames.indexOf(tsi)<0)
             tns.push(tsi);
         }
@@ -1042,8 +1050,12 @@
           if (!m)
             return;
           for (i = m.length-1; i>=0; i--) {
-            if (m[i].meta && m[i].meta.insert && (s=m[i].meta.insert[name]))
+            if (m[i].meta && m[i].meta.insert && (s=m[i].meta.insert[name])) {
+              if (Pdq.subcomps[s])
+                return Pdq.subcomps[s];
+              //puts('REQ INSERT', name, s);
               return s;
+            }
           }
         },
       },
@@ -1161,8 +1173,8 @@
         else {
           Pdq.pluginConf = Object.assign(Pdq.pluginConf, lst);
         }
-        if (Pdq.useHere)
-          Pdq.useHere = window.jsiWebSocket;
+        if (Pdq.addBreak)
+          Pdq.addBreak = window.jsiWebSocket;
       } catch(e) {
         console.warn("FAILED: "+e);
       }

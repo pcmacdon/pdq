@@ -1,8 +1,6 @@
-
-
 "use strict";Pdq.component("pdq",{template:`
   <div class="pdqplugframe" v-on:click.alt.ctrl.stop="$pdqBreakCall">
-    <!-- Pdq main window -->
+    <!-- Pdq main window.  Note component is not preprocessed like other plugins. -->
     <b-sidebar id="pdq_sidebar" bg-variant="info" title="Menu">
       <component v-bind:is="$pdqInsert('sidebar')" />
     </b-sidebar>
@@ -142,7 +140,7 @@
 
 
 
-Vue.component("pdq-menu",{template:`
+Pdq.subcomponent("pdq-menu",{template:`
   <div class="pdqplugframe" v-on:click.alt.ctrl.stop="$pdqBreakCall">
     <component v-bind:is="$pdqInsert('left')"/>
     <ul style="float:left;" class="pdq-nav-area list-unstyled" v-bind:class="{'pdq-mmisopen':Mmenuisopen}" >
@@ -162,7 +160,7 @@ Vue.component("pdq-menu",{template:`
 
 
 
-Vue.component("pdq-menu-item",{template:`
+Pdq.subcomponent("pdq-menu-item",{template:`
   <li v-if="isVisible" v-bind:style="sbstyle" class="pdqplugframe" v-on:click.alt.ctrl.stop="$pdqBreakCall">
       <router-link
         active-class="active"
