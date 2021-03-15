@@ -40,9 +40,13 @@
             <b-col>
               <b-button v-on:click="Avail" :disabled="!s_avail.length"
                 :title="s_avail.length?'Plugins available to install':'All available plugins already installed'">
-              Add New
+                <b-icon icon="plus"></b-icon>
+                Add
               </b-button>
-              <b-button v-on:click="Refresh" title="Refresh list of available plugins">Refresh</b-button>
+              <b-button v-on:click="Refresh" title="Refresh list of available plugins">
+                <b-icon icon="arrow-clockwise"></b-icon>
+                Refresh
+              </b-button>
             </b-col>
           </b-row>
           
@@ -113,7 +117,7 @@
               <b-container class="m-2">
                 <b-row v-for="(r,i) in getPlugItems" v-bind:key="i">
                   <b-col cols="6">
-                    <b-input-group>
+                    <b-input-group :title="r.title">
                       <b-input-group-prepend>
                         <b-input-group-text class="bg-info text-dark" style="width:6em;">{{r.name}}:</b-input-group-text>
                       </b-input-group-prepend>
@@ -124,8 +128,9 @@
               </b-container>
  
               <b-row class="my-1">
-                <b-form-checkbox v-model="i_hide" class="mx-2" v-on:change="Hide">Hide</b-form-checkbox>
                 <b-form-checkbox v-model="i_enabled" class="mx-2" v-bind:disabled="pname=='admin'" v-on:change="Enable">Enabled</b-form-checkbox>
+                <b-form-checkbox v-model="i_uionly"  class="mx-2" v-bind:disabled="pname=='admin'" v-on:change="UiOnly">UI Only</b-form-checkbox>
+                <b-form-checkbox v-model="i_hide"    class="mx-2" v-bind:disabled="pname=='admin'" v-on:change="Hide">Hide-Menu</b-form-checkbox>
                 <b-form-checkbox v-model="i_builtin" class="mx-2" disabled>Builtin</b-form-checkbox>
               </b-row>
           </b-container>
@@ -171,7 +176,7 @@
       sortBy: 'date',
       sortDesc: false,
       sortDirection: 'asc',
-      info:{name:'', title:'', date:'', version:0, author:'', enabled:false, builtin:false, hide:false, dltime:'', dlfrom:''},
+      info:{name:'', title:'', date:'', version:0, author:'', enabled:false, builtin:false, hide:false, dltime:'', dlfrom:'', uionly:false},
     };
     for (var p in data.info)
       data['i_'+p] = data.info[p];
@@ -217,8 +222,10 @@
     getPlugItems:function getPlugItems() {
       var info = this.info;
       return [ {name:"Plugin", val:info.name},
-       {name:"Date", val:info.date}, {name:"Version", val:info.version},
-       {name:"DL On", val:info.dltime}, {name:"DL From", val:info.dlfrom}
+       {name:"Version", val:info.version},
+       {name:"Published", val:info.date, title:'Date plugin was published'},
+       {name:"Installed", val:info.dltime},
+       {name:"Site", val:info.dlfrom}
       ];
     },
   },
@@ -234,8 +241,8 @@
       return this.i_builtin || lv==0 || lv<=this.i_version;
     },
     NewestVer:function NewestVer(item) {
-      var n = item.name, vv = Pdq.Plugins[n].latestver;
-      return (vv ? vv: item.latestver);
+      var n = item.name, vv = Pdq.Plugins[n];
+      return (vv ? vv.latestver: '');
     },
     GetInstall:function GetInstall(data) {
       var name = data.item.name;
@@ -277,6 +284,9 @@
       this.trace("DUPLICATE", this.dupName);
       this.$pdqSend('Duplicate', {plugin:this.dupNameFrom, plugnew:this.dupNameTo});
       this.$pdqPush('plugins/');
+    },
+    UiOnly:function UiOnly(val) {
+      this.$pdqSend('UiOnly', {uionly:val, plugin:this.pname});
     },
     Enable:function Enable(val) {
       this.trace("ENABLE", this.pname, val);

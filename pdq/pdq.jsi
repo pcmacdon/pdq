@@ -17,6 +17,7 @@ function pdq(args:array|string=void, conf:object=void) {
     appDir    :'.',     // Directory of project.
     branch    :'',      // Branch, defaults to current
     dbreset   :false,   // Drop admin database tables.
+    devel     :false,   // Debug for backend development.
     foreignkey:true,    // Enable foreign key constraints.
     gen       :'',      // Generate plugin  
     init      :false,   // Do initialization to create db and fossil repository.
@@ -59,6 +60,7 @@ function pdq(args:array|string=void, conf:object=void) {
     dbSchemaVersion:0,
     dbfile:null,
     dbfos:null,
+    dbopts:{},
     dirs:{},
     done:0,
     file:'index.html', // Source file.
@@ -110,7 +112,7 @@ function pdq(args:array|string=void, conf:object=void) {
           author:'', date:'', timestamp:'', timeupdated:'', rating:0,
           wopts:{}, sopts:'', hide:false, site:'', latestver:0,
           dlfrom:'', dltime:'', udata:'', requires:'', label:'', description:'',
-          branch:'', vuecomps:''
+          branch:'', vuecomps:'', hascode:false, uionly:false,
         },
       },
       pluglist: { // Available external plugins
@@ -129,7 +131,9 @@ function pdq(args:array|string=void, conf:object=void) {
   Pdq = PLUGINS.pdq = self;
   
   moduleOpts(options, self, conf);
-  if (!self.noTry)
+  if (self.devel)
+    self.noTry = self.noCache = true;
+  else if (!self.noTry)
     self.noTry = Interp.conf('asserts');
   self.nocommit = self.noCommit;
 
@@ -198,8 +202,12 @@ function pdq(args:array|string=void, conf:object=void) {
     var Msgs = plugin.messages;
     var queries = plugin.queries;
     //puts("QQ", plugin.Mod, queries);
+    puts('POPTS', plugin.Mod, plugin.dbopts);
     var login=getLogin(id);
-    if (queries && queries[cmd]) {
+    if (plugin.dbopts.uionly) {
+      WcSend(id, 'warning', {msg:'uionly ignore of cmd: ' + cmd});
+      LogWarn('uionly ignore', cmd);
+    } else if (queries && queries[cmd]) {
       puts("QUERY", cmd);
       queryCall(id, msg, plugin, cmd, login);
     } else if (cmd !== 'init' && login === null) {
@@ -459,7 +467,27 @@ function pdq(args:array|string=void, conf:object=void) {
       db.query('DELETE from pdq_Admin_Pluglist WHERE rowid = @rowid');
     }
   };
+
+  function filePath(name) {
+    var ldir = File.realpath(self.appDir + '/'+name);
+    if (self.appDir !==ldir.substr(0, self.appDir.length))
+      throw "out of tree";
+    return ldir;
+  }
   
+  function readFile(id:number, fname:string) {
+    var data=null, fpath=filePath(fname);
+    data = File.read(fpath);
+    return { name:fname, fileData:data};
+  }
+  self.fop.readFile = readFile;
+  
+  function writeFile(id:number, fname:string, data:string) {
+    var fpath=filePath(fname);
+    return { name:fname,  msg:'', cnt:File.write(fpath, data) };
+  }
+  self.fop.writeFile = writeFile;
+
   function getLogin(id:number) {
     var ws = self.ws;
     if (self.local)
@@ -493,39 +521,47 @@ function pdq(args:array|string=void, conf:object=void) {
     }    
 
     var db = self.db;
-    var epochs = {}, nepochs = {}, estr, nstr, isconf;
+    var epochs = {}, nepochs = {}, estr, nstr, isconf, cstr;
     isconf = db.onecolumn("SELECT rowid FROM sqlite_master WHERE name == 'pdq_Admin_Conf'");
+      puts('ccc', self.configAttrs);
     if (isconf) {
       estr = db.onecolumn("SELECT val from pdq_Admin_Conf WHERE opt = 'table_epochs'");
-      if (estr) {
-        epochs = JSON.parse(estr);
-      }
-      estr = db.onecolumn("SELECT val from pdq_Admin_Conf WHERE opt = 'configAttrs'");
       if (estr)
-        self.configAttrs = Object.merge(self.configAttrs, JSON.parse(estr));  // Get home, history-mode, etc
+        epochs = JSON.parse(estr);
+      cstr = db.onecolumn("SELECT val from pdq_Admin_Conf WHERE opt = 'configAttrs'");
+      puts('cst', typeof(cstr), cstr);
+      if (cstr)
+        self.configAttrs = Object.assign(self.configAttrs, JSON.parse(cstr));  // Get home, history-mode, etc
+      puts('ccc', self.configAttrs);
     }
     for (var k in self.tables) {
       var t =  self.tables[k], n = t.name;
       if (epochs[n] && t.epoch!=epochs[n]) {
-        LogInfo("EPOCH DROP TABLE", n);
+        LogInfo("(RE)BUILDING TABLE  DUE TO EPOCH CHANGE:", n);
         db.eval('DROP TABLE IF EXISTS '+n);
       }
       nepochs[n] = t.epoch;
       Jsi_TableObj(db, n, t.defs, {verbose:true});
     }
     nstr = JSON.stringify(nepochs);
-    if (!estr)
-      db.query("INSERT into pdq_Admin_Conf (opt, val) VALUES('table_epochs',@nstr)");
-    else if (estr != nstr)
-      db.query("UPDATE pdq_Admin_Conf SET val = @nstr WHERE opt = 'table_epochs'");
+    if (!estr || estr != nstr)
+      confValSet('table_epochs', nstr);
     self.fop.pdqVerPurge();
   }
+
+  function confAttrSet(name:string, val:string) {
+    self.configAttrs[name] = val;
+    confValSet('configAttrs', JSON.stringify(self.configAttrs));
+  }
+  self.fop.confAttrSet = confAttrSet;
   
   function confValSet(name:string, val:string) {
     var db = self.db;
-    db.query("UPDATE pdq_Admin_Conf SET val = @val WHERE opt = 'name'");
-    if (!db.conf('changeCnt'))
-      db.query("INSERT into pdq_Admin_Conf (opt, val) VALUES(@name,@val)");
+    var rid = db.onecolumn('SELECT rowid FROM pdq_Admin_Conf WHERE opt == @name');
+    if (rid)
+      db.query('UPDATE pdq_Admin_Conf SET opt=@val WHERE rowid=@rid');
+    else
+      db.query('INSERT INTO pdq_Admin_Conf (opt, val) VALUES(@name,@val)');
   }
   
   function mimeLookup(ws:userobj, id:number, extension:string, url:string) {

@@ -27,6 +27,8 @@
     compCur:null,
     wsonline:false,
     subcomps:{},
+    pdqRoutes:[],
+    pdqRouteList:[],
   };
   
   Pdq.pluginConfDef = {
@@ -66,9 +68,7 @@
   
   var Session = {id:''};
   var pdqStores = {};
-  var pdqRoutes = [];
-  var pdqRouteList = [];
-  var vm, router, store;
+  var router, store;
   var metaInsertNames = [ "bottom", "left", "left2", "right", "sidebar", "top", "topmenu" ];
   var ChkArgs = {};
   
@@ -87,6 +87,7 @@
       s_t_username:'',
       s_t_verInfo:{},
       s_t_isInit:false,
+      v_t_home:'',
       s_t_route:{from:'', to:''},
       v_t_rowsPerPage:20,
       s_t_rowsPerPageList:[5, 10, 12, 15, 20, 30, 50, 100, 200, 1000],
@@ -378,7 +379,7 @@
     }
     var id = $('#apperr')[0];
     if (disc)
-      id.innerHTML = '<b>Jsish Websocket Disconnect:</b> <button onclick="Pdq.StartWebSock()">Reconnect</button>';
+      id.innerHTML = '<b>Disconnected from Jsish-Websocket:</b> <button onclick="Pdq.StartWebSock()">Reconnect</button>';
     else
       id.innerHTML = '';
   }
@@ -605,11 +606,24 @@
   
   Pdq.subcomponent = function(path, comp) { return Component(path, comp, true);};
   
+  var compMembers = ['template', 'name', 'popts',
+    'data', 'props', 'propsData', 'computed', 'methods', 'watch', 'el', 
+    'beforeCreate', 'created', 'beforeMount', 'mounted', 'beforeUpdate', 'updated',
+    'activated', 'deactivated', 'beforeDestroy', 'destroyed', 'errorCaptured',
+    'beforeRouteEnter',  'beforeRouteUpdate', 'beforeRouteLeave' ];
+    
+  function checkComponent(fpre, cc) {
+    for (var i in cc) {
+      if (compMembers.indexOf(i)<0)
+        console.warn(fpre+' unknown member in component: ', i);
+    }
+  }
   
   // After a component is loaded, find in pdqRouteList then call StoreMap.
   function MapSetup(fpre, cc) {
+    checkComponent(fpre, cc);
     var plst = fpre.split('/'), plugname=plst[1], subp = plst[2];
-    var n = null, m = pdqRouteList, pre='/';
+    var n = null, m = Pdq.pdqRouteList, pre='/';
     for (var i = 1; i<plst.length; i++) {
       var rnam = pre + plst[i];
       for (var j = 0; j<m.length; j++) {
@@ -967,7 +981,8 @@
         if (!pr.meta) pr.meta = {};
         pr.meta.visible = false;
       }
-      pdqRouteList.push(pr);
+      Pdq.pdqRouteList.push(pr);
+      Pdq.pdqRoutes.push(pr.name);
       
       if (!pi.messages)
         pi.messages = {};
@@ -985,10 +1000,11 @@
     
     var punk = Vue.component("pdq-unknown",{template:`<div class="unknown"> <router-view /> <b>PAGE NOT FOUND</b></div>`});
     var redir = Pdq.pluginConf.attrs.home;
+    Store.state.v_t_home = redir;
     var rconf = {
       routes: [{ path:'/', name:'/', redirect:redir, component:ImportMap('pdq'), 
           meta:{visible:true, data:Pdq},
-          children:pdqRouteList.concat(pdqRoutes),
+          children:Pdq.pdqRouteList,
         },
         {path: '*', name:'*', component:punk,  meta:{visible:false} }
       ]
@@ -1023,7 +1039,8 @@
       if (sz)
         return sz;
     });
-    Vue.filter('$pdqToTitle',  function(s) { if (s) s = s[0].toUpperCase()+s.substr(1); return s;});
+    Vue.filter('$pdqToTitle',  function(s) {
+        if (s) s = s[0].toUpperCase()+s.substr(1).replace('_',' '); return s;});
    
     for (var mm in pdqStores) {
       store.registerModule(mm, pdqStores[mm]);
@@ -1060,7 +1077,7 @@
         },
       },
     });
-    vm = new Vue({
+    Pdq.vm = new Vue({
       store:store,
       router:router,
       data:Pdq

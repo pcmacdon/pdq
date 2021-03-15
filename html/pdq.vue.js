@@ -13,6 +13,7 @@
                 <b-nav-item v-if="Mmenushowbut" id="pdq_menubut2" v-b-toggle.pdq_sidebar>&#9776;</b-nav-item>
                 <b-button size="sm" class="my-2 my-sm-0">PDQ</b-button>
               </b-nav-form>
+              <pdq-breadcrumb />
             </b-navbar-nav>
             
             <component v-bind:is="$pdqInsert('top')" class="ml-1" />
@@ -122,28 +123,50 @@
       if (u!=='') return '#/admin/users/'+u;
       return '#/admin/login';
     },
-    bcitems:function bcitems() {
-      var rr = [], mr = this.$route.matched;
-      var mlp = '', mte = mr[mr.length-1].path.split('/');
-      for (var i = 1; i<mte.length; i++) {
-        var t = mte[i];
-        if (t[0] === ':') break;
-        mlp += ('/'+t);
-        rr.push({text:t, href:'#'+mlp, active:(i==(mte.length-1))});
-      }
-      return rr;
-    },
   }),
-
 });
 
 
-
+Pdq.subcomponent("pdq-breadcrumb",{template:`
+  <span class="d-inline-flex">
+    <b-link to="/" class="mt-2 ml-2">
+      <b-icon icon="house-fill" variant="primary" scale="1.25" aria-hidden="true"></b-icon>
+    </b-link>
+    <b-breadcrumb route=route :items="bcitems" class="p-1 pl-2 pt-2 mb-0 bg-transparent" />
+  </span>
+`
+,
+  data:function data() { return this.$root.$data; },
+  methods: {
+    $pdqBreak:function $pdqBreak() {debugger;},
+  },
+  computed: {
+    bcitems:function bcitems() {
+      var rr = [], tr = this.$route, mr = tr.matched,
+        mlp = '', mte = mr[mr.length-1].path.split('/'), mtl = (mte.length-1),
+        pss = tr.path.split('/'), psl = pss.length-1;
+      if (!pss[psl])
+        psl--;
+      for (var i = 1; i<=mtl; i++) {
+        var t = mte[i], nt = t;
+        if (t[0] === ':') {
+          if (psl<mtl)
+            break;
+          nt = decodeURIComponent(pss[i]);
+        } else
+          nt = this.$pdqToTitle(nt);
+        mlp += ('/'+t);
+        rr.push({text:nt, href:'#'+mlp, active:(i==psl)});
+      }
+      return rr;
+    },
+  },
+});
 
 Pdq.subcomponent("pdq-menu",{template:`
   <div class="pdqplugframe" v-on:click.alt.ctrl.stop="$pdqBreakCall">
     <component v-bind:is="$pdqInsert('left')"/>
-    <ul style="float:left;" class="pdq-nav-area list-unstyled" v-bind:class="{'pdq-mmisopen':Mmenuisopen}" >
+    <ul style="float:left;" class="text-nowrap pdq-nav-area list-unstyled" v-bind:class="{'pdq-mmisopen':Mmenuisopen}" >
       <pdq-menu-item v-for="(r,i) in routes" v-bind:key="i" v-bind:mispop="false" v-bind:route="r" v-bind:level="0"/>
     </ul>
     <component v-bind:is="$pdqInsert('left2')"/>

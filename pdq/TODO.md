@@ -1,9 +1,9 @@
 Admin:
-- Plugins: control install/run of has-code/fields/requires installs.
+- Plugin install/run control of has-code/fields/requires installs.
+- Hiding nav and/or sidebars.
 - Improve Demo!
 - Config control for control-alt-b1 calling $pdqBreak.
-- Config for home instead of /Admin.
-- Hiding nav and/or sidebars.
+- Modify table.configAttrs, eg. home from /Admin.
 - Add fossil push/update/commit controls.
 - Use plugin label field instead of name in menu.
 - Status: external news/updates (outside of fossil)
@@ -33,6 +33,7 @@ Lesser:
 - Projects ending in 'DEV' always use private branch???
 
 Done:
+- Plugin with has-code should be disabled on install.
 - Added "requires" member to plugins.
 - Make status page look like jumbotron from Demo
 - Update without delete/install

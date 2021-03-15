@@ -3,21 +3,25 @@
 
     <div v-if="View=='Main'">
       <div class="p-1">
-        <b-button v-bind:to="'system/settings'">Settings</b-button>
-        <b-button v-bind:to="'system/software'">
-          Software
+        <b-button v-bind:to="'system/settings'" title="System settings">
+          <b-icon icon="gear-fill"></b-icon>
+          Settings
+        </b-button>
+        <b-button v-bind:to="'system/software'" title="Current software version">
+          <b-icon icon="info-circle-fill"></b-icon> 
           <b-badge v-if="canUpdatePdq" variant="danger">1</b-badge>
+          Software
         </b-button>
       </div>
       <b-jumbotron bg-variant="info" text-variant="white" border-variant="dark">
-        <template v-slot:header>PDQ = Vue + Jsi</template>
+        <template v-slot:header>PDQ : Vue + Jsi</template>
       
         <template v-slot:lead>
           <transition enter-active-class="animated fadeIn" mode="in-out"
             v-on:after-enter="ShowLev = true"
           >
             <p v-if="ShowTop">
-              Atomic plugin site management.
+              Plugin based, atomic site management.
             </p>
           </transition>
         </template>
@@ -26,7 +30,7 @@
       
         <transition enter-active-class="animated bounce" mode="in-out">
           <p v-if="ShowLev">
-           Hot-reloading server with sqlite and websocket baked-in.
+           Server with hot-reload, sqlite and websocket baked-in.
           </p>
         </transition>
       </b-jumbotron>
@@ -38,37 +42,6 @@
         <h2>Software</h2>
 
         <b-table hover :items="tdata" :fields="tfields" striped bordered class="w-auto shadow" thead-class="bg-info"></b-table>
-
-<!--        
-        <b-row class="my-1">
-          <b-col sm="2"> <label>Current:</label> </b-col>
-          <b-col sm="3">
-            <b-input-group prepend="PDQ:">
-              <b-button variant="info"> {{vi.curversion}} </b-button>
-            </b-input-group>
-          </b-col>
-          <b-col sm="3">
-            <b-input-group prepend="JSI:">
-              <b-button variant="info"> {{vi.verjsi}} </b-button>
-            </b-input-group>
-          </b-col>
-          
-        </b-row>
-
-        <b-row class="my-1">
-          <b-col sm="2"> <label>Available:</label> </b-col>
-          <b-col sm="3">
-            <b-input-group prepend="PDQ:">
-              <b-button variant="info"> {{vi.version}} </b-button>
-            </b-input-group>
-          </b-col>
-          <b-col sm="3">
-            <b-input-group prepend="JSI:">
-              <b-button variant="info"> {{vi.verjsireq}} </b-button>
-            </b-input-group>
-          </b-col>
-        </b-row>
--->
 
         <div v-if="s_t_isAdmin">
           <b-button :disabled="!canUpdatePdq" class="my-2" variant="primary" v-on:click="Upgrade" :title="canUpdatePdq?'Upgrade PDQ now':'PDQ can not be upgraded'">Upgrade PDQ</b-button>
@@ -84,7 +57,7 @@
     <b-card v-else-if="View=='settings'" class="my-2">
       <b-container fluid> 
       <h2>Settings</h2>
-      <b-checkbox v-if="0" v-model="pick">Test</b-checkbox>
+        <b-checkbox v-if="0" v-model="pick">Test</b-checkbox>
         <b-row class="my-1">
           <b-col sm="5">
             <b-input-group prepend="Project Name:" class="mt-2">
@@ -95,13 +68,23 @@
             </b-input-group>
           </b-col>
         </b-row>
+
+        <b-row class="my-1">
+          <b-col sm="5">
+            <b-input-group prepend="Home:" class="mt-2">
+              <b-form-select v-model="v_t_home" :disabled="!s_t_isAdmin" :options="homeOpts" @change="SetHome"></b-form-select>
+            </b-input-group>
+          </b-col>
+        </b-row>
+
       </b-container>
     </b-card>
         
     <div v-else>
       Unknown view: {{View}}
     </div>
-    <div v-if="0">
+  <!--
+    <div>
       <b-button
         @click="viscol=!viscol"
         :variant="viscol?'info':'primary'">
@@ -111,6 +94,7 @@
         Here is the <b>collapse</b>!
       </b-collapse>
     </div>
+  -->
   </div>
 `
 ,
@@ -122,6 +106,7 @@
       showPdqInfo:false,
       ShowLev:false, ShowTop:false,
       project:'',
+      homeOpts:Pdq.pdqRoutes,
       tfields: [
         {key:'version',class:'bg-info'},
         {key:'pdq'},
@@ -181,6 +166,10 @@
     },
     ProjName:function ProjName() {
       this.$pdqSend('ProjName', {info:{project:this.v_t_project}});
+    },
+    SetHome:function SetHome(val) {
+      puts('Val', val);
+      this.$pdqSend('SetHome', {home:val});
     },
   },
   watch: {

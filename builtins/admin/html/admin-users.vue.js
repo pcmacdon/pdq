@@ -2,7 +2,10 @@
   <div>
     <b-card>
     <div v-if="showList">
-      <b-button class="my-2" variant="primary" title="Add a new user" v-on:click="UserAdd">+</b-button>
+      <b-button class="my-2" title="Add a new user" v-on:click="UserAdd">
+        <b-icon icon="plus"></b-icon>
+        Add
+      </b-button>
       <b-table striped hover v-bind:items="rows" v-bind:fields="lfields" small bordered head-variant="light" class="shadow">
         <template v-slot:cell(login)="data">
           <router-link v-bind:to="'Users/'+data.value">{{ data.value }}</router-link>
@@ -20,8 +23,14 @@
       <b-alert variant="danger" v-if="loginBad" show>No such user: "{{puser}}"</b-alert>
       <div v-else>
         <span v-if="s_t_isAdmin">
-          <b-button class="my-2" variant="primary" v-on:click="UserUpdate" v-bind:disabled="notMod">{{isAdd?'Add':'Update'}}</b-button>
-          <b-button class="my-2" variant="primary" v-on:click="showDel=!showDel" v-if="!isAdd" v-bind:disabled="noDel">Delete</b-button>
+          <b-button class="my-2" v-on:click="UserUpdate" v-bind:disabled="notMod" title="Commit changes">
+          <b-icon icon="box-arrow-up"></b-icon>
+          {{isAdd?'Add':'Update'}}
+          </b-button>
+          <b-button class="my-2" v-on:click="showDel=!showDel" v-if="!isAdd" v-bind:disabled="noDel" title="Delete user">
+            <b-icon icon="trash"></b-icon>
+            Delete
+          </b-button>
         </span>
         <b-button class="my-2" variant="primary" v-on:click="logout()" v-if="isLogin">Logout</b-button>
         <div v-if="showDel">

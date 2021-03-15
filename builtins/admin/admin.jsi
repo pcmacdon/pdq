@@ -1,6 +1,10 @@
 export default {
   messages: {
     plugins: {
+      Avail: function(_msg:object) {
+        var list = plugop.getPluginList(_msg.data);
+        this.$pdqResp(_msg, {list:list});
+      },
       List: function(_msg:object) {
         var db = Pdq.dbfos;
         var res = db.query("SELECT rowid,* FROM pdq_Admin_Plugins");
@@ -25,9 +29,15 @@ export default {
           plugop.JsonUpdate();
         //this.$pdqResp(_msg, {changed:changed, hide:hide, plugin:plugin});
       },
-      Avail: function(_msg:object) {
-        var list = plugop.getPluginList(_msg.data);
-        this.$pdqResp(_msg, {list:list});
+      UiOnly: function(_msg:object, plugin, uionly) {
+        var db = Pdq.dbfos;
+        if (plugin == 'admin') return;
+        var res = db.query("UPDATE pdq_Admin_Plugins SET uionly = @uionly WHERE name = @plugin AND uionly != @uionly");
+        var changed = db.conf('changeCnt');
+        if (changed)
+          plugop.JsonUpdate();
+        //_msg.id = -1;
+        //this.$pdqResp(_msg, {changed:changed, enabled:enabled, plugin:plugin});
       },
       Remove: function(_msg:object, opts:object, plugin:string) {
         var db = Pdq.dbfos;
@@ -99,6 +109,10 @@ export default {
       
       plugVerinfo: function(_msg:object) {
       },
+      SetHome: function(_msg:object, home:string) {
+        puts("GOT HOME", home);
+        Pdq.fop.confAttrSet('home', home);
+      },
   
     },
   
@@ -167,11 +181,11 @@ export default {
          // this.$pdqSend(_msg.id, _msg.cmd+'_rsp', {}, _msg.opts);
       },
       Load: function(_msg:object, path:string) {
-        this.$pdqResp(_msg, readFile(path));
+        this.$pdqResp(_msg,  Pdq.fop.readFile(_msg.id, path));
       },
     
       Save: function(_msg:object, path:string, text:string) {
-        this.$pdqResp(_msg, writeFile(path, text));
+        this.$pdqResp(_msg, Pdq.fop.writeFile(_msg.id, path, text));
       },
     },
     repos: {

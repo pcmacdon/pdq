@@ -95,8 +95,10 @@ function loadOne(n, bi, dd) {
         ignores.push(k); }
     pinfo.name = n;
     pinfo.builtin = (bi==1);
+    pinfo.hascode = File.exists(fn+'.jsi');
     if (!ddv) {
-      pinfo.enabled = true;
+      if (!pinfo.hascode)
+        pinfo.enabled = true;
       ddv = dbInsert(pinfo);
       if (dd)
         dd[n] = ddv;
@@ -173,19 +175,24 @@ function Install(name, opts) {
     function subChk(dir, ext) {
       if (!File.isdir(dir))
         return;
-      d = File.glob('*.'+ext, {dir:dir, recurse:true});
-      if (ext == 'jsi' && d.length && !opts.allowCode)
-        throw 'plugin contains .jsi code which is disallowed: '+dir;
+      d = File.glob('*'+ext, {dir:dir, recurse:true});
+      var hascode = (ext == '.jsi' && d.length);
+      if (hascode) {
+        if (!opts.allowCode)
+          throw 'plugin contains .jsi code which is disallowed: '+dir;
+        //if ()
+        //  jsc.content.disabled = true;
+      }
       for (fn of d) {
-        msg = Pdq.fileSynChk(dir+'/'+fn, (ext=='js'));
+        msg = Pdq.fileSynChk(dir+'/'+fn, (ext=='.js'));
         if (msg) {
           puts("SYNTAX ERROR: "+msg);
           throw msg;
         }
       }
     }
-    subChk(dir+'/html', 'js');
-    subChk(dir, 'jsi');
+    subChk(dir+'/html', '.js');
+    subChk(dir, '.jsi');
     jsc.content.dlfrom = opts.dlorigin;
     jsc.content.dltime = strftime();
     File.write(fni, JSON.stringify(jsc, true, 2));
@@ -250,7 +257,7 @@ function ConfGen() {
   jconf.status = {project:Pdq.project, projcode:Pdq.projcode};
   for (var i of dat) {
     var ip = (i.builtin ? jconf.builtins:jconf.plugins);
-    ip.push({name:i.name, enabled:i.enabled, hide:i.hide, date:i.date, vuecomps:i.vuecomps});
+    ip.push({name:i.name, enabled:i.enabled, hide:i.hide, date:i.date, uionly:(i.uionly?true:false), vuecomps:i.vuecomps});
   }
   return jconf;
 }
@@ -367,7 +374,7 @@ function plugdup(plugin:string, newName:string, fromDir='') {
             });
             // Rename tags of form:  <XXX-
             //dat = dat.replace(/  <'+plugin+'-'/g, '  <'+newName+'-');
-            dat = dat.map(['  <'+plugin+'-', '  <'+newName+'-']);
+            dat = dat.map(['  <'+plugin+'-', '  <'+newName+'-', '  </'+plugin+'-', '  </'+newName+'-']);
           }
         }
       }
