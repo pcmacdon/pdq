@@ -33,7 +33,7 @@
   
   Pdq.pluginConfDef = {
     status:{project:''},
-    attrs:{histmode:false, home:'/admin', noBreak:false }, plugins:[],
+    confattrs:{histmode:false, home:'/admin', noBreak:false }, plugins:[],
     builtins:[{"name":"admin", enabled:true}]
   };
   Pdq.pluginConf = JSON.parse(JSON.stringify(Pdq.pluginConfDef));
@@ -999,7 +999,7 @@
     }
     
     var punk = Vue.component("pdq-unknown",{template:`<div class="unknown"> <router-view /> <b>PAGE NOT FOUND</b></div>`});
-    var redir = Pdq.pluginConf.attrs.home;
+    var redir = Pdq.pluginConf.confattrs.home;
     Store.state.v_t_home = redir;
     var rconf = {
       routes: [{ path:'/', name:'/', redirect:redir, component:ImportMap('pdq'), 
@@ -1009,7 +1009,7 @@
         {path: '*', name:'*', component:punk,  meta:{visible:false} }
       ]
     };
-    if (Pdq.pluginConf.attrs.histmode)
+    if (Pdq.pluginConf.confattrs.histmode)
       rconf.mode = 'history';
   
     routeMapper(rconf.routes, 0);
@@ -1056,7 +1056,7 @@
         $pdqPush:pdqPush,
         $pdqToast:Pdq.toastMsg,
         $pdqToTitle: function $pdqToTitle(s) { if (s) s = s[0].toUpperCase()+s.substr(1); return s;},
-        $pdqBreakCall:function $pdqBreakCall(e) { if (!Pdq.noBreak && !Pdq.pluginConf.attrs.noBreak) this.$pdqBreak(e);},
+        $pdqBreakCall:function $pdqBreakCall(e) { if (!Pdq.noBreak && !Pdq.pluginConf.confattrs.noBreak) this.$pdqBreak(e);},
         $pdqBreak:function $pdqBreak() { console.warn('$pdqBreak: '+ this.$pdqPlug);},
         $pdqInsert:function $pdqInsert(name) {
           if (metaInsertNames.indexOf(name)<0) {
@@ -1082,6 +1082,14 @@
       router:router,
       data:Pdq
     }).$mount('#app');
+    ClearAppErr();
+  }
+  
+  function ClearAppErr() {
+    var id = $('#apperr')[0];
+    id.addEventListener("click", function() {
+      id.innerHTML = '';
+    });
   }
   
   Pdq.toastMsg = function(obj) {
@@ -1184,7 +1192,7 @@
     if (ok && window.PdqConfigStr) {
       try {
         var lst = JSON.parse(window.PdqConfigStr);
-        $matchObj(lst, '{attrs:object, builtins:array, plugins:array, status:object}')();
+        $matchObj(lst, '{confattrs:object, builtins:array, plugins:array, status:object}')();
         if (lst.builtins && !lst.builtins.find(function(el) { return el.name == 'admin'; }))
           console.warn('missing admin');
         else {

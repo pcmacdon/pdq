@@ -5,28 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="application-name" content="jsi index.html">
     <link rel='shortcut icon' href="html/favicon.ico" type="image/x-icon" />
-    <link rel="stylesheet" href="jsi/css/bootstrap.css">
-    <link rel="stylesheet" href="jsi/css/bootstrap-vue.css">
-    <link rel="stylesheet" href="jsi/css/animate.css">
-    <link rel="stylesheet" href="jsi/css/prism.css">
-    <link rel="stylesheet" href="jsi/css/VuePrismEditor.css">
+    <link rel="stylesheet" href="html/css/bootstrap.css">
+    <link rel="stylesheet" href="html/css/bootstrap-vue.css">
+    <link rel="stylesheet" href="html/css/animate.css">
+    <link rel="stylesheet" href="html/css/prism.css">
+    <link rel="stylesheet" href="html/css/VuePrismEditor.css">
     <link rel="stylesheet" href="html/pdq.css">
-    <script src="jsi/js/vue.js"></script>
-    <script src="jsi/js/vuex.js"></script>
-    <script src="jsi/js/vue-router.min.js"></script>
-    <script src="jsi/js/bootstrap-vue.min.js"></script>
-    <script src="jsi/js/bootstrap-vue-icons.min.js"></script>
-    <script src="jsi/js/vue-markdown-pdq.min.js"></script>
-    <script src="jsi/js/prism.js"></script>
-    <script src="jsi/js/VuePrismEditor.umd.min.js"></script>
-    <script src="jsi/js/Sortable.min.js"></script>
-    <script src="jsi/js/vuedraggable.umd.min.js"></script>
-    <script src="jsi/js/Jsish.js"></script>
+    <script src="html/js/vue.js"></script>
+    <script src="html/js/vuex.js"></script>
+    <script src="html/js/vue-router.min.js"></script>
+    <script src="html/js/bootstrap-vue.min.js"></script>
+    <script src="html/js/bootstrap-vue-icons.min.js"></script>
+    <script src="html/js/vue-markdown-pdq.min.js"></script>
+    <script src="html/js/prism.js"></script>
+    <script src="html/js/VuePrismEditor.umd.min.js"></script>
+    <script src="html/js/Sortable.min.js"></script>
+    <script src="html/js/vuedraggable.umd.min.js"></script>
+    <script src="html/js/Jsish.js"></script>
     <script src="html/pdq.js"></script>
     <script>
         Vue.config.productionTip=true;
         Vue.config.errorHandler = function(msg, vm, info) {  console.warn("VUE-ERR: ",info, msg); document.getElementById('apperr').innerText = 'Vue: '+info+': '+msg.message; };
-        window.onerror = function(msg, src, ln, col, err) {  console.warn("ERR: ",msg); document.getElementById('apperr').innerText = msg+': @'+src+' : '+ln; debugger; };
+        window.onerror = function(msg, src, ln, col, err) {  console.warn("ERR: ",msg); if (msg.substr(0,14) != 'ResizeObserver') document.getElementById('apperr').innerText = msg+': @'+src+' : '+ln; debugger; };
     </script>
 </head>
 

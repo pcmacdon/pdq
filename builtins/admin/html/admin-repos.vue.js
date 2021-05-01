@@ -76,7 +76,7 @@
  </div>
 `
 ,
-  data:function data() {
+  data:function() {
     return {
       showList:true,
       show:false, rows:[], numRows:0, totalRows:0,
@@ -105,37 +105,37 @@
     };
   },
   watch: {
-    currentPage:function currentPage(val) { this.doListRepos(); },
-    sortDesc:function sortDesc(val) { this.doListRepos(); },
-    sortBy:function sortBy(val) { this.doListRepos(); },
-    perPage:function perPage(val) { this.doListRepos(); },
-    s_updated:function updated(val) {
+    currentPage:function(val) { this.doListRepos(); },
+    sortDesc:function(val) { this.doListRepos(); },
+    sortBy:function(val) { this.doListRepos(); },
+    perPage:function(val) { this.doListRepos(); },
+    s_updated:function(val) {
       this.doListRepos();
     },
-    t_rows:function rows(val) {
+    t_rows:function(val) {
       this.rows = val.rows;
       this.numRows = val.rows.length;
       this.totalRows = val.cnt;
     },
-    filter:function filter(val) {
+    filter:function(val) {
       if (!this.filter.length)
         this.doListRepos();
     },
   },
-  mounted:function mounted() {
+  mounted:function() {
     this.showModDialog = false;
     this.doListRepos();
   },
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
-    doFilter:function doFilter() {
+    doFilter:function() {
       this.doListRepos();
     },
-    doListRepos:function doListRepos() {
+    doListRepos:function() {
       this.$pdqSend('Files', {max:this.perPage, page:this.currentPage,
         filter:this.filter, sortBy:this.sortBy, sortDesc:this.sortDesc, dir:this.dir});
     },
-    Apply:function Apply() {
+    Apply:function() {
       var call = [], rows = this.s_List_rows;
       for (var i in rows) {
         var it = rows[i];
@@ -145,12 +145,12 @@
       this.applyLst = call;
       this.showModDialog = true;
     },
-    doApply:function doApply() {
+    doApply:function() {
       this.$pdqSend('List_Apply', {op:this.bulkAction,rowids:this.applyLst});
     },
-    Filter:function Filter() {
+    Filter:function() {
     },
-    selectAll:function selectAll(on) {
+    selectAll:function(on) {
       if (!on) {
         this.checkedNames = [];
       } else {
@@ -160,7 +160,7 @@
         this.checkedNames = call;
       }
     },
-    getTitle:function getTitle(row) {
+    getTitle:function(row) {
       if (!row.timestamp)
         return '';
       return row.timestamp+' UTC: Update=' + row.timeupdated;

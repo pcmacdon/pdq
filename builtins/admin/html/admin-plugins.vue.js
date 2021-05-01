@@ -188,38 +188,38 @@
       default:'null',
     },
   },
-  mounted:function mounted() {
+  mounted:function() {
     this.updatePlugInfo(this.$route.params.plugin);
   },
-  beforeRouteUpdate:function beforeRouteUpdate(to, from, next) {
+  beforeRouteUpdate:function(to, from, next) {
     this.trace('to',to);
     if (to.name == '/admin/plugins')
       this.updatePlugInfo(to.params.plugin);
     next();
   },
   watch: {
-    s_instRows:function instRows(val) {
+    s_instRows:function(val) {
       this.fillPlugin();
     },
-    s_updated:function updated(val) {
+    s_updated:function(val) {
       this.clearMod();
     },
   },
   computed: {
-    showDup:function showDup() { return this.pname=='-'; },
-    showAvail:function showAvail() { return this.pname=='+'; },
-    showPlugin:function showPlugin() { 
+    showDup:function() { return this.pname=='-'; },
+    showAvail:function() { return this.pname=='+'; },
+    showPlugin:function() { 
       this.trace("SSSA", this.pname, this.pname!==undefined && this.pname != '+');
       return this.pname!==undefined && this.pname != '+' &&  this.pname != '-';
     },
-    showInst:function showInst() { return this.pname===undefined; },
-    notMod:function notMod() {
+    showInst:function() { return this.pname===undefined; },
+    notMod:function() {
       //return false;
       var s1 = JSON.stringify(this.getInfo()),
         s2 = JSON.stringify(this.info);
       return (s1 === s2);
     },
-    getPlugItems:function getPlugItems() {
+    getPlugItems:function() {
       var info = this.info;
       return [ {name:"Plugin", val:info.name},
        {name:"Version", val:info.version},
@@ -232,28 +232,28 @@
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
     //trace:console.log,
-    trace:function trace() {},
-    upgradeDisabled:function upgradeDisabled() {
+    trace:function() {},
+    upgradeDisabled:function() {
       var n = this.i_name;
       if (!Pdq.Plugins[n]) return true;
       var lv = Pdq.Plugins[n].latestver;
       this.trace("upgradeDisabled", lv, this.i_version);
       return this.i_builtin || lv==0 || lv<=this.i_version;
     },
-    NewestVer:function NewestVer(item) {
+    NewestVer:function(item) {
       var n = item.name, vv = Pdq.Plugins[n];
       return (vv ? vv.latestver: '');
     },
-    GetInstall:function GetInstall(data) {
+    GetInstall:function(data) {
       var name = data.item.name;
       this.trace("GetInstall", name);
       this.$pdqSend('Install', {name:name, opts:{allowCode:true}});
     },
-    InstallApply:function InstallApply() {
+    InstallApply:function() {
       this.trace("InstallApply: UNIMPL");
     },
-    Avail:function Avail() { this.$router.push('plugins/+'); },
-    updatePlugInfo:function updatePlugInfo(pname) {
+    Avail:function() { this.$router.push('plugins/+'); },
+    updatePlugInfo:function(pname) {
       if (!this.s_avail.length)
         this.$pdqSend('Avail', {nocache:false, novar:false});
       this.pname = pname;
@@ -265,51 +265,51 @@
       else if (pname)
         this.fillPlugin();
     },
-    ShowFiles:function ShowFiles() {
+    ShowFiles:function() {
       var ipre = (this.i_builtin?'builtins/':'plugins/');
       var path = 'Files/'+encodeURIComponent(ipre+this.pname+'/');
       this.$pdqPush(path);
     },
-    Remove:function Remove() {
+    Remove:function() {
       this.trace("REMOVE", this.pname);
       var opts = {keepconf:false};
       this.$pdqSend('Remove', {plugin:this.pname, opts:opts});
     },
-    Duplicate:function Duplicate() {
+    Duplicate:function() {
       this.dupNameFrom = this.pname;
       this.dupNameTo = this.pname+'_new';
       this.$pdqPush('plugins/-');
     },
-    DuplicateDo:function DuplicateDo() {
+    DuplicateDo:function() {
       this.trace("DUPLICATE", this.dupName);
       this.$pdqSend('Duplicate', {plugin:this.dupNameFrom, plugnew:this.dupNameTo});
       this.$pdqPush('plugins/');
     },
-    UiOnly:function UiOnly(val) {
+    UiOnly:function(val) {
       this.$pdqSend('UiOnly', {uionly:val, plugin:this.pname});
     },
-    Enable:function Enable(val) {
+    Enable:function(val) {
       this.trace("ENABLE", this.pname, val);
       this.$pdqSend('Enable', {enabled:val, plugin:this.pname});
     },
-    Hide:function Hide(val) {
+    Hide:function(val) {
       this.trace("Hide", this.pname, val);
       this.$pdqSend('Hide', {hide:val, plugin:this.pname});
     },
-    Upgrade:function Upgrade() {
+    Upgrade:function() {
       this.trace("UPDATE", this.pname);
       this.$pdqSend('Install', {name:this.pname, opts:{allowCode:true, upgrade:true}});
     },
-    getInfo:function getInfo() {
+    getInfo:function() {
       var res = {}, pi = this.info;
       for (var p in pi)
         res[p] = this['i_'+p];
       return res;
     },
-    Refresh:function Refresh() {
+    Refresh:function() {
       this.$pdqSend('Avail', {nocache:true, novar:false});
     },
-    setInfo:function setInfo(info) {
+    setInfo:function(info) {
       if (!info)
         info = this.info;
       for (var p in info) {
@@ -320,7 +320,7 @@
           this[idx] = info[p];
       }
     },
-    instSelectAll:function instSelectAll(on) {
+    instSelectAll:function(on) {
       if (!on) {
         this.instCheckedNames = [];
       } else {
@@ -330,7 +330,7 @@
         this.instCheckedNames = call;
       }
     },
-    getSelectAll:function getSelectAll(on) {
+    getSelectAll:function(on) {
       if (!on) {
         this.getCheckedNames = [];
       } else {
@@ -340,12 +340,12 @@
         this.getCheckedNames = call;
       }
     },
-    instGetTitle:function instGetTitle(row) {
+    instGetTitle:function(row) {
       if (!row.timestamp)
         return '';
       return row.timestamp+' UTC: Update=' + row.timeupdated;
     },
-    fillPlugin:function fillPlugin() {
+    fillPlugin:function() {
       if (!this.pname || this.pname == '+') return;
       var r = this.s_instRows;
       for (var i in r) {
@@ -362,10 +362,10 @@
       //  this.info = JSON.parse(this.infoI);
       this.pluginBad = true;
     },
-    clearMod:function clearMod() {
+    clearMod:function() {
       this.info = this.getInfo();
     },
-    DoAbort:function DoAbort() {
+    DoAbort:function() {
       this.clearMod();
       this.$router.push(this.nextlink);
     },

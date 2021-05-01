@@ -75,7 +75,7 @@
         this.$pdqPush('plugins');
         this.$pdqToast( {title:'Plugin Removed', msg: 'Plugin: '+plugin});
       },
-      Duplicate:function Duplicate(_msg,  plugin, plugnew) {
+      Duplicate:function(_msg,  plugin, plugnew) {
         this.$pdqSend('List', {}, {subp:'plugins'}); 
         this.$pdqPush('plugins');
         this.$pdqToast( {title:'Plugin Duplicate', msg: 'Plugin: '+plugin+' '+plugnew});

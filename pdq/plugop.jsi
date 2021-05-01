@@ -253,7 +253,7 @@ function vuepublish(dir='.', reverse='') { // Generate .vue.js to/from .vue file
 
 function ConfGen() {
   var dat = Pdq.db.query('SELECT * FROM '+Pdq.plugtbl); 
-  var jconf = {attrs:Pdq.configAttrs, plugins:[], builtins:[]};
+  var jconf = {confattrs:Pdq.configAttrs, plugins:[], builtins:[]};
   jconf.status = {project:Pdq.project, projcode:Pdq.projcode};
   for (var i of dat) {
     var ip = (i.builtin ? jconf.builtins:jconf.plugins);

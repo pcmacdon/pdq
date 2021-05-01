@@ -755,7 +755,7 @@ function pdq(args:array|string=void, conf:object=void) {
               c = c.trim().split('=');
               if (c.length == 2 && c[0] == 'PDQSESSIONID') {
                 var login;
-                if (c[1].length && login = fossil.checkSha(c[1])) {
+                if (c[1].length && (login = fossil.checkSha(c[1]))) {
                   rsp.username = login;
                   ws.idconf(_msg.id, {username:login});
                 }

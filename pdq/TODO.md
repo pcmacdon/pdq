@@ -1,5 +1,6 @@
 Admin:
-- Plugin install/run control of has-code/fields/requires installs.
+- Publishing changes, trusted sites.
+- Plugin install/run control of has-code/fields/prereqs.
 - Hiding nav and/or sidebars.
 - Improve Demo!
 - Config control for control-alt-b1 calling $pdqBreak.
