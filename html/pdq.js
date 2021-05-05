@@ -1192,7 +1192,7 @@
     if (ok && window.PdqConfigStr) {
       try {
         var lst = JSON.parse(window.PdqConfigStr);
-        $matchObj(lst, '{confattrs:object, builtins:array, plugins:array, status:object}')();
+        $matchObj(lst, '{builtins:array, confattrs:object, plugins:array, status:object}')();
         if (lst.builtins && !lst.builtins.find(function(el) { return el.name == 'admin'; }))
           console.warn('missing admin');
         else {

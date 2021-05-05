@@ -7,7 +7,7 @@
   mounted:function() {
   },
   methods: {
-    $pdqBreak:function $pdqBreak() {debugger;},
+    $pdqBreak:function() {debugger;},
   },
 });
 
