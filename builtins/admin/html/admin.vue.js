@@ -4,10 +4,10 @@
   </div>
 `
 ,
-  mounted:function() {
+  mounted:function mounted() {
   },
   methods: {
-    $pdqBreak:function() {debugger;},
+    $pdqBreak:function $pdqBreak() {debugger;},
   },
 });
 
@@ -32,10 +32,10 @@ Pdq.subcomponent("pdq-admin-login",{template:`
   </div>
 `
 ,
-  data:function() { return this.$root.$data; },
+  data:function data() { return this.$root.$data; },
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
-    login:function() {
+    login:function login() {
       if(this.Login.username == "" || this.Login.password == "") {
         this.Login.LoginFill=5;
       } else {
@@ -44,7 +44,7 @@ Pdq.subcomponent("pdq-admin-login",{template:`
       }
     },
   },
-  beforeRouteEnter:function(to, from, next) {
+  beforeRouteEnter:function beforeRouteEnter(to, from, next) {
     to.meta.data.Login.frompath = from.path;
     next();
     
@@ -63,14 +63,14 @@ Pdq.subcomponent("pdq-admin-logout",{template:`
   </div>
 `
 ,
-  data:function() { return this.$root.$data; },
+  data:function data() { return this.$root.$data; },
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
-    logout:function() {
+    logout:function logout() {
       this.$refs.logoutform.submit();
     },
   },
-  beforeRouteEnter:function(to, from, next) {
+  beforeRouteEnter:function beforeRouteEnter(to, from, next) {
     to.meta.data.Login.frompath = from.path;
     next();
     

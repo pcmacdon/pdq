@@ -68,7 +68,7 @@
   </div>
 `
 ,
-  data:function() {
+  data:function data() {
     var data =  {
       rows:[],
       checkedNames:[], checkedAll:false,
@@ -104,15 +104,15 @@
       default:'null',
     },
   },
-  mounted:function() {
+  mounted:function mounted() {
     this.$pdqSend('List');
     this.fillUser();
   },
-  beforeRouteUpdate:function(to, from, next) {
+  beforeRouteUpdate:function beforeRouteUpdate(to, from, next) {
     next();
     this.fillUser();
   },
-  beforeRouteLeave:function(to, from, next) {
+  beforeRouteLeave:function beforeRouteLeave(to, from, next) {
     var notmod = this.notMod;
     this.nextlink = to;
     if (notmod)
@@ -122,43 +122,43 @@
     }
   },
   watch: {
-    s_rows:function(val) {
+    s_rows:function rows(val) {
       this.rows = val;
       this.fillUser();
     },
-    s_updated:function(val) {
+    s_updated:function updated(val) {
       this.clearMod();
     },
   },
   computed: {
-    showUser:function() {
+    showUser:function showUser() {
       return this.$route.params.user!==undefined;
     },
-    showList:function() {
+    showList:function showList() {
       return this.$route.params.user===undefined;
     },
-    isLogin:function() {
+    isLogin:function isLogin() {
       return (this.puser && this.puser === this.s_t_username && !this.s_t_isLocalhost);
     },
-    notMod:function() {
+    notMod:function notMod() {
       //return false;
       var s1 = JSON.stringify(this.getInfo()),
         s2 = JSON.stringify(this.info);
       return (s1 === s2);
     },
-    noDel:function() {
+    noDel:function noDel() {
       return (this.i_uid === 1 || this.i_login === this.s_t_username);
     },
-    noCaps:function() {
+    noCaps:function noCaps() {
       return (this.i_uid === 1);
     },
   },
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
-    logout:function() {
+    logout:function logout() {
       this.$pdqPush('logout');
     },
-    fillUser:function() {
+    fillUser:function fillUser() {
       this.showModDialog = false;
       this.puser = this.$route.params.user;
       this.isAdd = (this.puser === '+');
@@ -192,13 +192,13 @@
       var u = this.info;
       this.i_login = u.login; this.i_uid = u.uid,  this.i_info=u.info; this.i_pw=u.pw; this.i_cap=u.cap; 
     },*/
-    getInfo:function() {
+    getInfo:function getInfo() {
       var res = {}, pi = this.info;
       for (var p in pi)
         res[p] = this['i_'+p];
       return res;
     },
-    setInfo:function(info) {
+    setInfo:function setInfo(info) {
       if (!info)
         info = this.info;
       for (var p in info) {
@@ -209,25 +209,25 @@
           this[idx] = info[p];
       }
     },
-    UserUpdate:function() {
+    UserUpdate:function UserUpdate() {
       this.info = this.getInfo();
       this.$pdqSend('Update', {info: this.info, isAdd:this.isAdd});
     },
-    clearMod:function() {
+    clearMod:function clearMod() {
       this.info = this.getInfo();
     },
-    DoAbort:function() {
+    DoAbort:function DoAbort() {
       this.clearMod();
       this.$router.push(this.nextlink);
     },
-    UserAdd:function() {
+    UserAdd:function UserAdd() {
       this.$pdqPush('users/+');
     },
-    UserDel:function() {
+    UserDel:function UserDel() {
       this.info = this.getInfo();
       this.$pdqSend('Delete', {info: this.info});
     },
-    selectAll:function(on) {
+    selectAll:function selectAll(on) {
       if (!on) {
         this.checkedNames = [];
       } else {
@@ -237,7 +237,7 @@
         this.checkedNames = call;
       }
     },
-    getTitle:function(row) {
+    getTitle:function getTitle(row) {
       if (!row.timestamp)
         return '';
       return row.timestamp+' UTC: Update=' + row.timeupdated;

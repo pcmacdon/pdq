@@ -99,7 +99,7 @@
 `
 ,
   props:{ view:{type:String, default:''} },
-  data:function() {
+  data:function data() {
     return {
       pick:false,
       viscol:false,
@@ -123,57 +123,57 @@
     this.ShowTop=true;
   },
   computed: {
-    mycol:function() { return this.$refs.mycol; },
-    View:function() { var v = this.$route.params.view; return (v?v:'Main'); },
-    notMod:function() { return Pdq.pluginConf.status.project == this.v_t_project; },
-    vertitle:function() {
+    mycol:function mycol() { return this.$refs.mycol; },
+    View:function View() { var v = this.$route.params.view; return (v?v:'Main'); },
+    notMod:function notMod() { return Pdq.pluginConf.status.project == this.v_t_project; },
+    vertitle:function vertitle() {
       var vi = this.s_t_verInfo;
       var s = 'Current='+vi.curversion + ',  Latest='+vi.version
         + ', Jsi-have='+ vi.verjsi + ',  Jsi-req=' + vi.verjsireq
         + ', IsLocal='+ this.s_t_isLocalhost;
       return (this.canUpdatePdq?'Not ':'')+'Up To Date: '+s;
     },
-    tdata:function() {
+    tdata:function tdata() {
       var vi = this.s_t_verInfo;
       return [
         {version:'Current', pdq:vi.curversion, jsi:vi.verjsi},
         {version:'Available', pdq:vi.version, jsi:vi.verjsireq},
       ];
     },
-    vi:function() { return this.s_t_verInfo; },
-    needJsiUpdate:function() {
+    vi:function vi() { return this.s_t_verInfo; },
+    needJsiUpdate:function needJsiUpdate() {
       var vi = this.s_t_verInfo;
       return (vi.version && vi.curversion<vi.version && vi.verjsi<vi.verjsireq);
     },
-    vercur:function() {
+    vercur:function vercur() {
       return this.s_t_verInfo.curversion;
     },
-    canUpdatePdq:function() {
+    canUpdatePdq:function canUpdatePdq() {
       var vi = this.s_t_verInfo;
       return (vi.version && vi.version>vi.curversion && vi.verjsi >= vi.verjsireq && this.s_t_isLocalhost);
     },
   },
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
-    outOfDate:function(str) {
+    outOfDate:function outOfDate(str) {
       var day = 24 * 60 * 60 * 1000;
       var d = new Date(str);
       var old = ((new Date()-d)>day);
       return old;
     },
-    Upgrade:function() {
+    Upgrade:function Upgrade() {
       this.$pdqSend('Upgrade', {info:{project:this.v_t_project}});
     },
-    ProjName:function() {
+    ProjName:function ProjName() {
       this.$pdqSend('ProjName', {info:{project:this.v_t_project}});
     },
-    SetHome:function(val) {
+    SetHome:function SetHome(val) {
       puts('Val', val);
       this.$pdqSend('SetHome', {home:val});
     },
   },
   watch: {
-    admstatus:function() {
+    admstatus:function admstatus() {
       this.$bvToast.toast('Admin status updated', { title: 'Admin', autoHideDelay: 3000 });
     },
   },

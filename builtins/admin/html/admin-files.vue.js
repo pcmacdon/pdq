@@ -129,7 +129,7 @@
 `
 ,
   props:{ indir:{type:String, default:''} },
-  data:function() {
+  data:function data() {
     return {
       newtext:'', newtitle:'',
       path:null,
@@ -168,7 +168,7 @@
       sortDirection: 'asc',
     };
   },
-  mounted:function() {
+  mounted:function mounted() {
     this.showApplyDialog = false;
     this.showAbortDialog = this.ismodified = false;
     this.files_tbl = this.$refs.files_tbl.toString();
@@ -181,7 +181,7 @@
       this.doLoadFile(this.$route.params.indir);
 
   },
-  beforeRouteUpdate:function(to, from, next) {
+  beforeRouteUpdate:function beforeRouteUpdate(to, from, next) {
     var idir = to.params.indir;
     var dir = (idir?decodeURIComponent(idir):'');
     this.showList=(dir == '' || dir[dir.length-1]=='/');
@@ -191,7 +191,7 @@
       this.doLoadFile(dir);
     next();
   },
-  beforeRouteLeave:function(to, from, next) {
+  beforeRouteLeave:function beforeRouteLeave(to, from, next) {
     if (this.showList) {next(); return; }
     var ismod = this.docModified;
     this.nextlink = to;
@@ -202,30 +202,30 @@
     }
   },
   computed: {
-    docModified:function() {
+    docModified:function docModified() {
       if (this.ismodified)
         return true;
       return false;
     },
   },
   watch: {
-    s_rows:function(val) {
+    s_rows:function rows(val) {
       this.rows = val;
       this.totalRows = val.length;
     },
-    s_updated:function(val) {
+    s_updated:function updated(val) {
       this.ismodified = false;
     },
   },
   methods: {
     $pdqBreak:function $pdqBreak() {debugger;},
-    Create:function() {
+    Create:function Create() {
       this.$pdqSend('Create', {text:this.newtext,title:this.newtitle});
     },
-    Filter:function(lst) {
+    Filter:function Filter(lst) {
       this.totalRows = lst.length;
     },
-    fileAction:function(item) {
+    fileAction:function fileAction(item) {
       var ldir = this.dir + item.name;
       var isdir = this.isDir(item);
       this.showList=isdir;
@@ -237,10 +237,10 @@
       }
       this.$pdqPush('files/'+epath);
     },
-    isDir:function(data) {
+    isDir:function isDir(data) {
       return (data.perms[0] === 'd');
     },
-    getFPrefix:function(data) {
+    getFPrefix:function getFPrefix(data) {
       switch (data.perms[0]) {
         case 'd': return '/'; break;
         case 'p': return '|'; break;
@@ -249,26 +249,26 @@
       }
       return '*';
     },
-    getFname:function(val, key, data) {
+    getFname:function getFname(val, key, data) {
       var sf = this.getFPrefix(data);
       return data.name+sf;
     },
-    getDate:function(val) {
+    getDate:function getDate(val) {
       var d = new Date(val*1000);
       var n = d.toISOString().split('T')[0];
       return n + ' ' + d.toTimeString().split(' ')[0];
     },
-    doFilter:function() {
+    doFilter:function doFilter() {
       this.doListFiles();
     },
-    doListFiles:function() {
+    doListFiles:function doListFiles() {
       this.$pdqSend('Dir', {max:this.v_t_rowsPerPage, filter:this.filterBy, dir:this.dir});
     },
-    setListFiles:function(dir) {
+    setListFiles:function setListFiles(dir) {
       this.dir = (dir?decodeURIComponent(dir):'');
       this.doListFiles();
     },
-    Apply:function() {
+    Apply:function Apply() {
       var call = [], rows = this.rows;
       for (var i in rows) {
         var it = rows[i];
@@ -278,10 +278,10 @@
       this.applyLst = call;
       this.showApplyDialog = true;
     },
-    doApply:function() {
+    doApply:function doApply() {
       this.$pdqSend('Apply', {op:this.bulkAction,names:this.applyLst});
     },
-    selectAll:function(on) {
+    selectAll:function selectAll(on) {
       if (!on) {
         this.checkedNames = [];
       } else {
@@ -291,21 +291,21 @@
         this.checkedNames = call;
       }
     },
-    getTitle:function(row) {
+    getTitle:function getTitle(row) {
       if (!row.timestamp)
         return '';
       return row.timestamp+' UTC: Update=' + row.timeupdated;
     },
     // Edit
-    doLoadFile:function(path) {
+    doLoadFile:function doLoadFile(path) {
       this.fpath = (path?decodeURIComponent(path):null);
       if (this.fpath)
         this.$pdqSend('Load', {path: this.fpath});
     },
-    Save:function() {
+    Save:function Save() {
       this.$pdqSend('Save', {text:this.v_text, title:this.title, path:this.fpath});
     },
-    IndentSel:function(event) // Toggle textarea indent
+    IndentSel:function IndentSel(event) // Toggle textarea indent
     {   
       var id  = event.currentTarget;
       if (!id) return;
@@ -339,7 +339,7 @@
       return nv;
     },
   
-    insertAtCursor:function(input, textToInsert, del) {
+    insertAtCursor:function insertAtCursor(input, textToInsert, del) {
       input.focus();
       if (del)
         document.execCommand("delete", false, '');
@@ -359,19 +359,19 @@
       }
     },
   
-    doIndent:function(event) {
+    doIndent:function doIndent(event) {
       var nv = this.IndentSel( event);
       if (nv)
         this.update_v_text(nv);
     },
-    changed:function(event) {
+    changed:function changed(event) {
       //this.text2 = event.target.innerHTML.trim();
     },
-    doAbort:function() {
+    doAbort:function doAbort() {
       this.ismodified = false;
       this.$router.push(this.nextlink);
     },
-    Dlg:function(op) {
+    Dlg:function Dlg(op) {
       this.showAbortDialog = false;
       switch (op) {
         case 'save':
