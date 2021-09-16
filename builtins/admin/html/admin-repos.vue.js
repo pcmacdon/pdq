@@ -3,6 +3,7 @@
   <b-modal v-model="showModDialog" v-on:ok="doApply">Confirm Apply!</b-modal>
   <b-card>
   <b-container v-if="showList" fluid="md">
+  <b-button v-on:click="Fossilui"">Fossilui</b-button>
     <b-row>
       <b-col cols="3">
         <b-input-group prepend="Rows" v-if="showPerPage">
@@ -134,6 +135,9 @@
     doListRepos:function doListRepos() {
       this.$pdqSend('Files', {max:this.perPage, page:this.currentPage,
         filter:this.filter, sortBy:this.sortBy, sortDesc:this.sortDesc, dir:this.dir});
+    },
+    Fossilui:function Fossilui() {
+      this.$pdqSend('Fossilui', {});
     },
     Apply:function Apply() {
       var call = [], rows = this.s_List_rows;
