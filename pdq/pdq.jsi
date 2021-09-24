@@ -165,7 +165,7 @@ function pdq(args:array|string=void, conf:object=void) {
       return;
     }
     if (!login && op.substr(0,6) != 'select') {
-      LogWarn('must be logged in to use op: '+op);
+      LogWarn('must be logged in to use op:', op);
       return;
     }
     var res = query[op](id, msg, plugin, query);
@@ -174,7 +174,7 @@ function pdq(args:array|string=void, conf:object=void) {
   }
 
   function onRecv(ws:userobj, id:number, str:string) {
-    LogTrace("RECV: "+id+' '+str);
+    LogTrace("RECV:", id, str);
 
     function argCheckCall(data:object, func:function, nam:string) {
       // Compare function arg names match object names.
@@ -196,7 +196,7 @@ function pdq(args:array|string=void, conf:object=void) {
     if (subp) mcstr+='/'+subp;
     mcstr+='.'+cmd;
     if (!plugin) {
-      LogWarn("unknown plugin: "+mod);
+      LogWarn("unknown plugin:", mod);
       return;
     }
     var Msgs = plugin.messages;
@@ -215,7 +215,7 @@ function pdq(args:array|string=void, conf:object=void) {
       LogWarn('not logged in', cmd);
     } else if (cmd[0].toUpperCase() === cmd[0] && !isAdmin(id)) {
       WcSend(id, 'error', {msg:cmd+' requires ADMIN login'});
-      LogWarn("Admin cmd: "+cmd);
+      LogWarn("Admin cmd:", cmd);
      } else if (Msgs && ((subp && Msgs[subp] && (mscmd=Msgs[subp][cmd]))
         || ((mscmd=Msgs[cmd])))
         ) {
@@ -247,7 +247,7 @@ function pdq(args:array|string=void, conf:object=void) {
         }
       }
     } else {
-      LogWarn("unknown web cmd: "+str);
+      LogWarn("unknown web cmd:", str);
       WcSend(id, 'warn', {msg:'unknown "'+mod+'" cmd: "'+cmd+'"'});
     }
   }
@@ -365,7 +365,7 @@ function pdq(args:array|string=void, conf:object=void) {
   {
     self.closeId = null;
     var wcnt = ws.conf('stats.connectCnt');
-    LogDebug("Client connections left: " + wcnt);
+    LogDebug("Client connections left:", wcnt);
     if (wcnt>0)
       return;
     if (ws && !self.wsObj)
@@ -445,7 +445,7 @@ function pdq(args:array|string=void, conf:object=void) {
       vc.verjsireq = cont.verjsireq;
       vc.checkeddate = now;
     } catch(e) {
-      LogWarn('failed to get PDQ version: '+e);
+      LogWarn('failed to get PDQ version:', e);
     }
     if (!cont)
       return vc;
@@ -510,14 +510,14 @@ function pdq(args:array|string=void, conf:object=void) {
     var appDir = self.appDir;
     if (!File.isdir(appDir)) {
       File.mkdir(appDir);
-      LogWarn('RES: '+res);
+      LogWarn('RES:', res);
     }
     if (self.appDir !== '.')
       File.chdir(self.appDir);
     appDir = self.appDir = File.realpath(appDir);
     if (!File.exists('.fslckout') && self.project != 'PDQ') {
       var res = fossil.open(self.fosfile);
-      LogWarn('RES: '+res);
+      LogWarn('RES:', res);
     }    
 
     var db = self.db;
