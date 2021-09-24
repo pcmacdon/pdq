@@ -3,6 +3,8 @@
 [PDQ](https://jsish.org/fossil/pdq) 
 is a early-stage draft project to use Jsi and Fossil to providing CMS like functionality.
 
+**NOTE**: currently works under native Linux, but not Windows nor WSL.
+
 PDQ is modelled loosely after Wordpress, but is standalone and stores it's data
 within it's own fossil repository and thus can be decentralized.
 

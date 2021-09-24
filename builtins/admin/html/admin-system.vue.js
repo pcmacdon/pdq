@@ -43,9 +43,12 @@
 
         <b-table hover :items="tdata" :fields="tfields" striped bordered class="w-auto shadow" thead-class="bg-info"></b-table>
 
-        <div v-if="s_t_isAdmin">
-          <b-button :disabled="!canUpdatePdq" class="my-2" variant="primary" v-on:click="Upgrade" :title="canUpdatePdq?'Upgrade PDQ now':'PDQ can not be upgraded'">Upgrade PDQ</b-button>
-        </div>
+		<span>
+          <span v-if="s_t_isAdmin">
+            <b-button :disabled="!canUpdatePdq" class="my-2" variant="primary" v-on:click="Upgrade" :title="canUpdatePdq?'Upgrade PDQ now':'PDQ can not be upgraded'">Upgrade PDQ</b-button>
+          </span>
+	      <b-button class="my-2" variant="primary" v-on:click="Plugins" :title="'List Plugins'">Plugins</b-button>
+	    </span>
         
         <div v-if="needJsiUpdate">
           Note, before you can update PDQ you'll need to download/install your version of Jsi from <b-link href="https://jsish.org/bin/jsish">jsish.org</b-link>
@@ -167,6 +170,9 @@
     ProjName:function ProjName() {
       this.$pdqSend('ProjName', {info:{project:this.v_t_project}});
     },
+    Plugins:function Plugins() {
+		this.$router.push('/admin/plugins');
+	},
     SetHome:function SetHome(val) {
       puts('Val', val);
       this.$pdqSend('SetHome', {home:val});
