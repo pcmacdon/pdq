@@ -12,7 +12,7 @@ source('genlist.jsi');
 
 function pdq(args:array|string=void, conf:object=void) {
 
-  var options = {       // Run Jsi from the web in a sandbox.
+  var options = {       // Run Jsi as a standalone web CMS.
     anyOrigin :false,   // Allow CORS.
     appDir    :'.',     // Directory of project.
     branch    :'',      // Branch, defaults to current
