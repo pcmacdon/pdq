@@ -1,6 +1,8 @@
 # README
 
-[PDQ](https://jsish.org/fossil/pdq) 
+NOTE: this project is no longer fossil-hosted on jsish.org
+
+[PDQ](https://github.com/pcmacdon/pdq) 
 is a early-stage draft project to use Jsi and Fossil to providing CMS like functionality.
 
 **NOTE**: currently works under native Linux, but not Windows nor WSL.
@@ -20,7 +22,7 @@ Then run it with:
 ```
 This should open a web browser at the GUI, which you should note is currently not yet complete.
 
-PDQ Plugins come from a separate repos [Plugin](https://jsish.org/fossil/pdq-plugins).
+PDQ Plugins come from a separate repos [Plugin](https://github.com/pcmacdon/pdq-plugins).
 
 ## Updating
 
@@ -32,9 +34,10 @@ To updates PDQ we use:
 ## Installation
 
 ### Getting Fossil and Jsish:
+Get fossil from https://fossil-scm.org/home/uv/download.html
+and jsish from http://github.com/pcmacdon/jsibin, then
+
 ```
-    wget http://jsish.org/bin/fossil
-    wget http://jsish.org/bin/jsish
     sudo install jsish fossil /usr/local/bin/
 ```
 
@@ -86,7 +89,4 @@ which grab changes every 15 minutes.
 ### Never
 - Unversioned: not practical with ssh/disk 
 
-## Git Mirror
-
-https://github.com/pcmacdon/pdq
 
